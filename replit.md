@@ -9,9 +9,10 @@ The MVP is complete with:
 - Chatbot CRUD operations with AI model selection
 - Knowledge Base management for training chatbots
 - Embed code generator with live preview
-- Analytics page (placeholder data)
+- **Real-time Analytics dashboard** with conversation and message tracking
 - Settings page with theme switching
 - Embeddable widget (widget.js) for external websites
+- Custom avatar image uploads for chatbots
 
 ## Recent Changes
 - January 2026: Initial MVP implementation
@@ -19,6 +20,13 @@ The MVP is complete with:
 - Built React frontend with Shadcn UI components
 - Implemented streaming chat with OpenAI (via Replit AI Integrations)
 - Added embeddable widget with SSE streaming responses
+- **Implemented real analytics dashboard** with PostgreSQL persistence
+  - Conversations and messages are stored in database
+  - Bar chart showing daily conversation trends
+  - Pie chart showing user vs bot message distribution
+  - Recent conversations list
+  - Filter by chatbot and time range (24h, 7d, 30d, 90d)
+- Added custom avatar image upload for chatbots
 
 ## Project Architecture
 
@@ -31,8 +39,8 @@ The MVP is complete with:
 
 ### Backend (server/)
 - **Framework:** Express.js
-- **Storage:** In-memory (MemStorage class)
-- **AI:** OpenAI via Replit AI Integrations (gpt-5, gpt-5.1, gpt-4o, gpt-4o-mini)
+- **Database:** PostgreSQL with Drizzle ORM
+- **AI:** OpenAI, Gemini, and custom endpoints via Replit AI Integrations
 
 ### Key Files
 - `shared/schema.ts` - Data models and Zod schemas
@@ -62,6 +70,15 @@ The MVP is complete with:
 - `GET /api/widget/:chatbotId/config` - Get widget configuration
 - `POST /api/widget/:chatbotId/chat` - Stream chat response (SSE)
 
+### Analytics
+- `GET /api/analytics/stats` - Get analytics stats (conversations, messages, etc.)
+- `GET /api/analytics/daily` - Get daily stats for charts
+- `GET /api/analytics/conversations` - Get recent conversations
+
+### Avatar Upload
+- `POST /api/chatbots/:id/avatar` - Upload custom avatar image
+- `DELETE /api/chatbots/:id/avatar` - Delete avatar image
+
 ## Running the Project
 The project runs on port 5000 with `npm run dev`. Express serves both the API and the Vite-built frontend.
 
@@ -77,6 +94,5 @@ To embed a chatbot on an external website:
 ```
 
 ## Known Limitations
-- Data is stored in memory (not persisted across restarts)
-- Analytics show placeholder data
 - No user authentication yet
+- Analytics don't track response times or satisfaction ratings yet

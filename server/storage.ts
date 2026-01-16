@@ -178,43 +178,39 @@ export class DatabaseStorage implements IStorage {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    let conversationQuery = db.select({ count: count() }).from(widgetConversations);
-    let conversationTodayQuery = db.select({ count: count() }).from(widgetConversations)
-      .where(gte(widgetConversations.createdAt, todayStart));
+    const allConversations = await db.select().from(widgetConversations)
+      .where(gte(widgetConversations.createdAt, startDate));
     
-    if (chatbotId) {
-      conversationQuery = conversationQuery.where(
-        and(eq(widgetConversations.chatbotId, chatbotId), gte(widgetConversations.createdAt, startDate))
-      ) as typeof conversationQuery;
-      conversationTodayQuery = conversationTodayQuery.where(
-        and(eq(widgetConversations.chatbotId, chatbotId), gte(widgetConversations.createdAt, todayStart))
-      ) as typeof conversationTodayQuery;
-    } else {
-      conversationQuery = conversationQuery.where(gte(widgetConversations.createdAt, startDate)) as typeof conversationQuery;
-    }
-
-    const [totalConvResult] = await conversationQuery;
-    const [todayConvResult] = await conversationTodayQuery;
+    const filteredConvs = chatbotId 
+      ? allConversations.filter(c => c.chatbotId === chatbotId)
+      : allConversations;
+    
+    const todayConvs = filteredConvs.filter(c => c.createdAt >= todayStart);
+    const filteredConvIds = new Set(filteredConvs.map(c => c.id));
+    const todayConvIds = new Set(todayConvs.map(c => c.id));
 
     const allMessages = await db
       .select()
       .from(widgetMessages)
       .where(gte(widgetMessages.createdAt, startDate));
 
-    const todayMessages = await db
-      .select()
-      .from(widgetMessages)
-      .where(gte(widgetMessages.createdAt, todayStart));
+    const filteredMessages = allMessages.filter(m => 
+      m.conversationId && filteredConvIds.has(m.conversationId)
+    );
 
-    const userMessages = allMessages.filter(m => m.role === 'user').length;
-    const assistantMessages = allMessages.filter(m => m.role === 'assistant').length;
+    const todayMessages = allMessages.filter(m => 
+      m.conversationId && todayConvIds.has(m.conversationId) && m.createdAt >= todayStart
+    );
+
+    const userMessages = filteredMessages.filter(m => m.role === 'user').length;
+    const assistantMessages = filteredMessages.filter(m => m.role === 'assistant').length;
 
     return {
-      totalConversations: totalConvResult?.count || 0,
-      totalMessages: allMessages.length,
+      totalConversations: filteredConvs.length,
+      totalMessages: filteredMessages.length,
       userMessages,
       assistantMessages,
-      conversationsToday: todayConvResult?.count || 0,
+      conversationsToday: todayConvs.length,
       messagesToday: todayMessages.length,
     };
   }
@@ -244,6 +240,25 @@ export class DatabaseStorage implements IStorage {
 
   async getDailyStats(chatbotId?: number, daysBack: number = 7): Promise<DailyStats[]> {
     const stats: DailyStats[] = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysBack);
+    startDate.setHours(0, 0, 0, 0);
+
+    const allConversations = await db.select().from(widgetConversations)
+      .where(gte(widgetConversations.createdAt, startDate));
+    
+    const filteredConvs = chatbotId 
+      ? allConversations.filter(c => c.chatbotId === chatbotId)
+      : allConversations;
+    
+    const filteredConvIds = new Set(filteredConvs.map(c => c.id));
+
+    const allMessages = await db.select().from(widgetMessages)
+      .where(gte(widgetMessages.createdAt, startDate));
+    
+    const filteredMessages = allMessages.filter(m => 
+      m.conversationId && filteredConvIds.has(m.conversationId)
+    );
     
     for (let i = daysBack - 1; i >= 0; i--) {
       const date = new Date();
@@ -253,36 +268,20 @@ export class DatabaseStorage implements IStorage {
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
 
-      let convQuery = db.select({ count: count() }).from(widgetConversations)
-        .where(and(
-          gte(widgetConversations.createdAt, date),
-          sql`${widgetConversations.createdAt} < ${nextDate}`
-        ));
+      const dayConvs = filteredConvs.filter(c => {
+        const created = new Date(c.createdAt);
+        return created >= date && created < nextDate;
+      });
 
-      if (chatbotId) {
-        convQuery = convQuery.where(
-          and(
-            eq(widgetConversations.chatbotId, chatbotId),
-            gte(widgetConversations.createdAt, date),
-            sql`${widgetConversations.createdAt} < ${nextDate}`
-          )
-        ) as typeof convQuery;
-      }
-
-      const [convResult] = await convQuery;
-
-      const messages = await db
-        .select({ count: count() })
-        .from(widgetMessages)
-        .where(and(
-          gte(widgetMessages.createdAt, date),
-          sql`${widgetMessages.createdAt} < ${nextDate}`
-        ));
+      const dayMsgs = filteredMessages.filter(m => {
+        const created = new Date(m.createdAt);
+        return created >= date && created < nextDate;
+      });
 
       stats.push({
         date: date.toISOString().split('T')[0],
-        conversations: convResult?.count || 0,
-        messages: messages[0]?.count || 0,
+        conversations: dayConvs.length,
+        messages: dayMsgs.length,
       });
     }
 

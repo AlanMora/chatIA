@@ -316,6 +316,50 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Analytics API ====================
+
+  // Get analytics stats
+  app.get("/api/analytics/stats", async (req, res) => {
+    try {
+      const chatbotId = req.query.chatbotId ? parseInt(req.query.chatbotId as string) : undefined;
+      const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      
+      const stats = await storage.getAnalyticsStats(chatbotId, days);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching analytics stats:", error);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
+  // Get daily stats for charts
+  app.get("/api/analytics/daily", async (req, res) => {
+    try {
+      const chatbotId = req.query.chatbotId ? parseInt(req.query.chatbotId as string) : undefined;
+      const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      
+      const dailyStats = await storage.getDailyStats(chatbotId, days);
+      res.json(dailyStats);
+    } catch (error) {
+      console.error("Error fetching daily stats:", error);
+      res.status(500).json({ error: "Failed to fetch daily stats" });
+    }
+  });
+
+  // Get recent conversations
+  app.get("/api/analytics/conversations", async (req, res) => {
+    try {
+      const chatbotId = req.query.chatbotId ? parseInt(req.query.chatbotId as string) : undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      
+      const conversations = await storage.getRecentConversations(chatbotId, limit);
+      res.json(conversations);
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
   // ==================== Widget API ====================
 
   // Get widget config (for embedded widget)
