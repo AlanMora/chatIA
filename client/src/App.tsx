@@ -15,12 +15,14 @@ import KnowledgeBase from "@/pages/knowledge-base";
 import EmbedPage from "@/pages/embed";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
+import ChatbotPreview from "@/pages/chatbot-preview";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/chatbots" component={Chatbots} />
+      <Route path="/chatbots/:id/preview" component={ChatbotPreview} />
       <Route path="/chatbots/:id" component={ChatbotEditor} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/embed" component={EmbedPage} />
