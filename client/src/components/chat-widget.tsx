@@ -185,9 +185,17 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
         style={{ backgroundColor: chatbot.primaryColor || "#3B82F6" }}
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
-            <Bot className="h-5 w-5" style={{ color: chatbot.textColor || "#FFFFFF" }} />
-          </div>
+          {chatbot.avatarImage ? (
+            <img
+              src={chatbot.avatarImage}
+              alt={chatbot.name}
+              className="h-10 w-10 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+              <Bot className="h-5 w-5" style={{ color: chatbot.textColor || "#FFFFFF" }} />
+            </div>
+          )}
           <div>
             <h3 className="font-semibold" style={{ color: chatbot.textColor || "#FFFFFF" }}>
               {chatbot.name || "Chatbot"}
@@ -224,12 +232,20 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
               )}
             >
               {message.role === "assistant" && (
-                <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                  style={{ backgroundColor: chatbot.primaryColor || "#3B82F6" }}
-                >
-                  <Bot className="h-4 w-4" style={{ color: chatbot.textColor || "#FFFFFF" }} />
-                </div>
+                chatbot.avatarImage ? (
+                  <img
+                    src={chatbot.avatarImage}
+                    alt={chatbot.name}
+                    className="h-8 w-8 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                    style={{ backgroundColor: chatbot.primaryColor || "#3B82F6" }}
+                  >
+                    <Bot className="h-4 w-4" style={{ color: chatbot.textColor || "#FFFFFF" }} />
+                  </div>
+                )
               )}
               <div
                 className={cn(
@@ -258,12 +274,20 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
           ))}
           {isLoading && (
             <div className="flex gap-3">
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                style={{ backgroundColor: chatbot.primaryColor || "#3B82F6" }}
-              >
-                <Bot className="h-4 w-4" style={{ color: chatbot.textColor || "#FFFFFF" }} />
-              </div>
+              {chatbot.avatarImage ? (
+                <img
+                  src={chatbot.avatarImage}
+                  alt={chatbot.name}
+                  className="h-8 w-8 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                  style={{ backgroundColor: chatbot.primaryColor || "#3B82F6" }}
+                >
+                  <Bot className="h-4 w-4" style={{ color: chatbot.textColor || "#FFFFFF" }} />
+                </div>
+              )}
               <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">Pensando...</span>

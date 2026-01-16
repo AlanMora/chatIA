@@ -8,7 +8,10 @@ import multer from "multer";
 import mammoth from "mammoth";
 import * as cheerio from "cheerio";
 
-const upload = multer({ 
+import path from "path";
+import fs from "fs";
+
+const uploadDocs = multer({ 
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
@@ -22,6 +25,32 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error('Invalid file type. Only PDF, DOC, DOCX, and TXT files are allowed.'));
+    }
+  }
+});
+
+const uploadImage = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const ext = path.extname(file.originalname);
+      cb(null, `avatar-${uniqueSuffix}${ext}`);
+    }
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for images
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
     }
   }
 });
@@ -155,7 +184,7 @@ export async function registerRoutes(
   });
 
   // Upload file and extract content
-  app.post("/api/knowledge-base/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/knowledge-base/upload", uploadDocs.single('file'), async (req, res) => {
     try {
       const file = req.file;
       const chatbotId = parseInt(req.body.chatbotId);
@@ -307,6 +336,7 @@ export async function registerRoutes(
         textColor: chatbot.textColor,
         position: chatbot.position,
         welcomeMessage: chatbot.welcomeMessage,
+        avatarImage: chatbot.avatarImage,
       });
     } catch (error) {
       console.error("Error fetching widget config:", error);
@@ -472,6 +502,100 @@ export async function registerRoutes(
       } else {
         res.status(500).json({ error: "Chat failed" });
       }
+    }
+  });
+
+  // ==================== Avatar Upload API ====================
+
+  // Serve uploaded images
+  app.use('/uploads', (req, res, next) => {
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const filePath = path.join(uploadsDir, req.path);
+    
+    // Security check: prevent path traversal
+    if (!filePath.startsWith(uploadsDir)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        res.status(404).json({ error: "File not found" });
+      }
+    });
+  });
+
+  // Upload avatar image for chatbot
+  app.post("/api/chatbots/:id/avatar", (req, res, next) => {
+    uploadImage.single('avatar')(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: "La imagen es muy grande. Máximo 5MB" });
+        }
+        if (err.message.includes('Invalid file type')) {
+          return res.status(400).json({ error: "Formato no válido. Usa JPG, PNG, GIF o WebP" });
+        }
+        return res.status(400).json({ error: "Error al procesar la imagen" });
+      }
+      next();
+    });
+  }, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ error: "No se subió ninguna imagen" });
+      }
+
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot) {
+        try { fs.unlinkSync(file.path); } catch {}
+        return res.status(404).json({ error: "Chatbot no encontrado" });
+      }
+
+      if (chatbot.avatarImage) {
+        try {
+          const oldPath = path.join(process.cwd(), chatbot.avatarImage.replace(/^\//, ''));
+          if (fs.existsSync(oldPath)) {
+            fs.unlinkSync(oldPath);
+          }
+        } catch {}
+      }
+
+      const avatarUrl = `/uploads/${file.filename}`;
+      const updatedChatbot = await storage.updateChatbot(id, { avatarImage: avatarUrl });
+      
+      res.json({ avatarImage: avatarUrl, chatbot: updatedChatbot });
+    } catch (error) {
+      console.error("Error uploading avatar:", error);
+      res.status(500).json({ error: "No se pudo subir la imagen" });
+    }
+  });
+
+  // Delete avatar image
+  app.delete("/api/chatbots/:id/avatar", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const chatbot = await storage.getChatbot(id);
+      
+      if (!chatbot) {
+        return res.status(404).json({ error: "Chatbot no encontrado" });
+      }
+
+      if (chatbot.avatarImage) {
+        try {
+          const filePath = path.join(process.cwd(), chatbot.avatarImage.replace(/^\//, ''));
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch {}
+      }
+
+      const updatedChatbot = await storage.updateChatbot(id, { avatarImage: null });
+      res.json({ chatbot: updatedChatbot });
+    } catch (error) {
+      console.error("Error deleting avatar:", error);
+      res.status(500).json({ error: "No se pudo eliminar la imagen" });
     }
   });
 

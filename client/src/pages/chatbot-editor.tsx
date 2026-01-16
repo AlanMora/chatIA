@@ -1,3 +1,4 @@
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -26,7 +27,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Save, Eye } from "lucide-react";
+import { ArrowLeft, Save, Eye, Upload, X, ImageIcon } from "lucide-react";
 import { Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -49,6 +50,7 @@ const chatbotFormSchema = z.object({
   temperature: z.string(),
   maxTokens: z.coerce.number().min(100).max(8192),
   isActive: z.boolean(),
+  avatarImage: z.string().nullable().optional(),
 });
 
 type ChatbotFormValues = z.infer<typeof chatbotFormSchema>;
@@ -102,6 +104,7 @@ export default function ChatbotEditor() {
       temperature: "0.7",
       maxTokens: 1024,
       isActive: true,
+      avatarImage: null,
     },
     values: chatbot ? {
       name: chatbot.name,
@@ -119,8 +122,12 @@ export default function ChatbotEditor() {
       temperature: chatbot.temperature || "0.7",
       maxTokens: chatbot.maxTokens || 1024,
       isActive: chatbot.isActive ?? true,
+      avatarImage: chatbot.avatarImage || null,
     } : undefined,
   });
+
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createMutation = useMutation({
     mutationFn: async (data: ChatbotFormValues) => {
@@ -143,6 +150,80 @@ export default function ChatbotEditor() {
       });
     },
   });
+
+  const uploadAvatarMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('avatar', file);
+      const response = await fetch(`/api/chatbots/${chatbotId}/avatar`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to upload avatar');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      form.setValue('avatarImage', data.avatarImage);
+      queryClient.invalidateQueries({ queryKey: ["/api/chatbots", chatbotId] });
+      toast({
+        title: "Imagen actualizada",
+        description: "La imagen del chatbot se ha actualizado correctamente.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo subir la imagen. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteAvatarMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/chatbots/${chatbotId}/avatar`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to delete avatar');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      form.setValue('avatarImage', null);
+      queryClient.invalidateQueries({ queryKey: ["/api/chatbots", chatbotId] });
+      toast({
+        title: "Imagen eliminada",
+        description: "La imagen del chatbot se ha eliminado.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo eliminar la imagen.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "Archivo muy grande",
+          description: "La imagen no puede ser mayor a 5MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+      uploadAvatarMutation.mutate(file);
+    }
+  };
 
   const updateMutation = useMutation({
     mutationFn: async (data: ChatbotFormValues) => {
@@ -603,6 +684,73 @@ export default function ChatbotEditor() {
                           </FormItem>
                         )}
                       />
+
+                      <div className="space-y-2">
+                        <FormLabel>Imagen del Avatar</FormLabel>
+                        <FormDescription>
+                          Personaliza la imagen que aparece junto a los mensajes del chatbot
+                        </FormDescription>
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileChange}
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          className="hidden"
+                          data-testid="input-avatar-file"
+                        />
+                        <div className="flex items-center gap-4">
+                          {watchedValues.avatarImage ? (
+                            <div className="relative">
+                              <img
+                                src={watchedValues.avatarImage}
+                                alt="Avatar del chatbot"
+                                className="h-20 w-20 rounded-full object-cover border-2"
+                                style={{ borderColor: watchedValues.primaryColor || "#3B82F6" }}
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                className="absolute -top-2 -right-2 h-6 w-6"
+                                onClick={() => deleteAvatarMutation.mutate()}
+                                disabled={deleteAvatarMutation.isPending || isNew}
+                                data-testid="button-delete-avatar"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div
+                              className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed"
+                              style={{ borderColor: watchedValues.primaryColor || "#3B82F6" }}
+                            >
+                              <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={uploadAvatarMutation.isPending || isNew}
+                              data-testid="button-upload-avatar"
+                            >
+                              <Upload className="mr-2 h-4 w-4" />
+                              {uploadAvatarMutation.isPending ? "Subiendo..." : "Subir Imagen"}
+                            </Button>
+                            {isNew && (
+                              <p className="text-xs text-muted-foreground">
+                                Guarda el chatbot primero para subir una imagen
+                              </p>
+                            )}
+                            {!isNew && (
+                              <p className="text-xs text-muted-foreground">
+                                JPG, PNG, GIF o WebP. Máximo 5MB
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -637,6 +785,7 @@ export default function ChatbotEditor() {
                     temperature: watchedValues.temperature || "0.7",
                     maxTokens: watchedValues.maxTokens || 1024,
                     isActive: watchedValues.isActive ?? true,
+                    avatarImage: watchedValues.avatarImage || null,
                     createdAt: new Date(),
                   }}
                   isPreview

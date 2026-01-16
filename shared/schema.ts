@@ -35,6 +35,7 @@ export const chatbots = pgTable("chatbots", {
   textColor: text("text_color").default("#FFFFFF"),
   position: text("position").default("bottom-right"),
   welcomeMessage: text("welcome_message").default("Hello! How can I help you today?"),
+  avatarImage: text("avatar_image"),
   // Behavior settings
   temperature: text("temperature").default("0.7"),
   maxTokens: integer("max_tokens").default(1024),
