@@ -366,7 +366,41 @@ export async function registerRoutes(
       const aiProvider = chatbot.aiProvider || "openai";
       const aiModel = chatbot.aiModel || "gpt-5";
 
-      if (aiProvider === "gemini") {
+      if (aiProvider === "custom") {
+        // Build OpenAI-compatible messages for custom endpoint
+        const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+          {
+            role: "system",
+            content: (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext,
+          },
+          ...messages.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+        ];
+
+        // Create custom OpenAI client for user's server
+        const customClient = new OpenAI({
+          apiKey: chatbot.customApiKey || "not-required",
+          baseURL: chatbot.customEndpoint?.replace(/\/chat\/completions\/?$/, "") || "",
+        });
+
+        // Stream response from custom endpoint
+        const stream = await customClient.chat.completions.create({
+          model: chatbot.customModelName || "default",
+          messages: chatMessages,
+          stream: true,
+          max_tokens: chatbot.maxTokens || 1024,
+        });
+
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || "";
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        }
+      } else if (aiProvider === "gemini") {
         // Build Gemini messages
         const systemPrompt = (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext;
         const geminiMessages = messages.map((m) => ({

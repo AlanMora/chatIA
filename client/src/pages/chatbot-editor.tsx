@@ -39,6 +39,9 @@ const chatbotFormSchema = z.object({
   systemPrompt: z.string().max(2000).optional(),
   aiModel: z.string(),
   aiProvider: z.string(),
+  customEndpoint: z.string().optional(),
+  customApiKey: z.string().optional(),
+  customModelName: z.string().optional(),
   primaryColor: z.string(),
   textColor: z.string(),
   position: z.string(),
@@ -59,6 +62,7 @@ const AI_MODELS = [
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "gemini" },
   { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "gemini" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Rápido)", provider: "gemini" },
+  { value: "custom", label: "Modelo Personalizado (Self-Hosted)", provider: "custom" },
 ];
 
 const POSITIONS = [
@@ -88,6 +92,9 @@ export default function ChatbotEditor() {
       systemPrompt: "Eres un asistente útil.",
       aiModel: "gpt-5",
       aiProvider: "openai",
+      customEndpoint: "",
+      customApiKey: "",
+      customModelName: "",
       primaryColor: "#3B82F6",
       textColor: "#FFFFFF",
       position: "bottom-right",
@@ -102,6 +109,9 @@ export default function ChatbotEditor() {
       systemPrompt: chatbot.systemPrompt || "Eres un asistente útil.",
       aiModel: chatbot.aiModel || "gpt-5",
       aiProvider: chatbot.aiProvider || "openai",
+      customEndpoint: chatbot.customEndpoint || "",
+      customApiKey: chatbot.customApiKey || "",
+      customModelName: chatbot.customModelName || "",
       primaryColor: chatbot.primaryColor || "#3B82F6",
       textColor: chatbot.textColor || "#FFFFFF",
       position: chatbot.position || "bottom-right",
@@ -355,12 +365,87 @@ export default function ChatbotEditor() {
                                     {model.label}
                                   </SelectItem>
                                 ))}
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Modelo Propio</div>
+                                {AI_MODELS.filter(m => m.provider === "custom").map((model) => (
+                                  <SelectItem key={model.value} value={model.value}>
+                                    {model.label}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+
+                      {watchedValues.aiProvider === "custom" && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                          <div className="text-sm font-medium text-muted-foreground mb-2">
+                            Configuración del Modelo Personalizado
+                          </div>
+                          <FormField
+                            control={form.control}
+                            name="customEndpoint"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>URL del Servidor</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="https://tu-servidor.com:8080/v1/chat/completions" 
+                                    {...field} 
+                                    data-testid="input-custom-endpoint"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  La URL completa del endpoint de tu modelo (compatible con API de OpenAI)
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="customModelName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Nombre del Modelo</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    placeholder="llama3, mistral-7b, gpt-4, etc." 
+                                    {...field} 
+                                    data-testid="input-custom-model-name"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  El identificador del modelo en tu servidor
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="customApiKey"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>API Key (Opcional)</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="password"
+                                    placeholder="sk-..." 
+                                    {...field} 
+                                    data-testid="input-custom-api-key"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Solo si tu servidor requiere autenticación
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      )}
 
                       <FormField
                         control={form.control}

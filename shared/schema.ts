@@ -26,6 +26,10 @@ export const chatbots = pgTable("chatbots", {
   systemPrompt: text("system_prompt").default("You are a helpful assistant."),
   aiModel: text("ai_model").default("gpt-5"),
   aiProvider: text("ai_provider").default("openai"),
+  // Custom/Self-hosted model settings
+  customEndpoint: text("custom_endpoint"),
+  customApiKey: text("custom_api_key"),
+  customModelName: text("custom_model_name"),
   // Appearance settings
   primaryColor: text("primary_color").default("#3B82F6"),
   textColor: text("text_color").default("#FFFFFF"),
