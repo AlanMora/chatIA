@@ -53,7 +53,9 @@ The MVP is complete with:
 
 ### Knowledge Base
 - `GET /api/knowledge-base/:chatbotId` - Get items for chatbot
-- `POST /api/knowledge-base` - Create item
+- `POST /api/knowledge-base` - Create text item
+- `POST /api/knowledge-base/upload` - Upload file (PDF, DOC, DOCX, TXT) and extract content
+- `POST /api/knowledge-base/url` - Extract content from web page URL
 - `DELETE /api/knowledge-base/:id` - Delete item
 
 ### Widget (for embedded use)

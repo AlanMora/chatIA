@@ -3,6 +3,27 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertChatbotSchema, insertKnowledgeBaseItemSchema } from "@shared/schema";
 import OpenAI from "openai";
+import multer from "multer";
+import mammoth from "mammoth";
+import * as cheerio from "cheerio";
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain'
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF, DOC, DOCX, and TXT files are allowed.'));
+    }
+  }
+});
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -121,6 +142,139 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting knowledge base item:", error);
       res.status(500).json({ error: "Failed to delete knowledge base item" });
+    }
+  });
+
+  // Upload file and extract content
+  app.post("/api/knowledge-base/upload", upload.single('file'), async (req, res) => {
+    try {
+      const file = req.file;
+      const chatbotId = parseInt(req.body.chatbotId);
+      const title = req.body.title || file?.originalname || 'Uploaded File';
+
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      if (!chatbotId) {
+        return res.status(400).json({ error: "chatbotId is required" });
+      }
+
+      let content = "";
+
+      // Extract content based on file type
+      if (file.mimetype === 'application/pdf') {
+        const pdfModule = await import("pdf-parse");
+        const pdfParse = pdfModule.default || pdfModule;
+        const pdfData = await pdfParse(file.buffer);
+        content = pdfData.text;
+      } else if (file.mimetype === 'application/msword' || 
+                 file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        content = result.value;
+      } else if (file.mimetype === 'text/plain') {
+        content = file.buffer.toString('utf-8');
+      }
+
+      if (!content.trim()) {
+        return res.status(400).json({ error: "Could not extract content from file" });
+      }
+
+      // Create knowledge base item
+      const item = await storage.createKnowledgeBaseItem({
+        chatbotId,
+        title,
+        content: content.trim(),
+        sourceType: "file",
+        sourceUrl: file.originalname,
+      });
+
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      res.status(500).json({ error: "Failed to process uploaded file" });
+    }
+  });
+
+  // Extract content from URL
+  app.post("/api/knowledge-base/url", async (req, res) => {
+    try {
+      const { chatbotId, url, title } = req.body;
+
+      if (!chatbotId || !url) {
+        return res.status(400).json({ error: "chatbotId and url are required" });
+      }
+
+      // Validate URL
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        return res.status(400).json({ error: "Invalid URL format" });
+      }
+
+      // Fetch the page content
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ChatbotKB/1.0)',
+        },
+      });
+
+      if (!response.ok) {
+        return res.status(400).json({ error: `Failed to fetch URL: ${response.statusText}` });
+      }
+
+      const html = await response.text();
+      const $ = cheerio.load(html);
+
+      // Remove script, style, and other non-content elements
+      $('script, style, nav, header, footer, aside, noscript, iframe').remove();
+
+      // Extract main content - try common content selectors first
+      let content = '';
+      const contentSelectors = ['main', 'article', '.content', '.post', '#content', '#main'];
+      
+      for (const selector of contentSelectors) {
+        const element = $(selector);
+        if (element.length > 0) {
+          content = element.text();
+          break;
+        }
+      }
+
+      // Fallback to body if no specific content container found
+      if (!content) {
+        content = $('body').text();
+      }
+
+      // Clean up whitespace
+      content = content.replace(/\s+/g, ' ').trim();
+
+      if (!content) {
+        return res.status(400).json({ error: "Could not extract content from URL" });
+      }
+
+      // Truncate if too long (max 50k characters)
+      if (content.length > 50000) {
+        content = content.substring(0, 50000) + '...';
+      }
+
+      // Get page title if not provided
+      const pageTitle = title || $('title').text().trim() || parsedUrl.hostname;
+
+      // Create knowledge base item
+      const item = await storage.createKnowledgeBaseItem({
+        chatbotId: parseInt(chatbotId),
+        title: pageTitle,
+        content,
+        sourceType: "url",
+        sourceUrl: url,
+      });
+
+      res.status(201).json(item);
+    } catch (error) {
+      console.error("Error extracting from URL:", error);
+      res.status(500).json({ error: "Failed to extract content from URL" });
     }
   });
 

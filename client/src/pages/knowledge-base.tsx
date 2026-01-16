@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -31,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BookOpen, Plus, FileText, Link as LinkIcon, Trash2, Upload } from "lucide-react";
+import { BookOpen, Plus, FileText, Link as LinkIcon, Trash2, Upload, Globe, File } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Chatbot, KnowledgeBaseItem } from "@shared/schema";
@@ -42,12 +43,18 @@ export default function KnowledgeBase() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<KnowledgeBaseItem | null>(null);
+  const [activeTab, setActiveTab] = useState("text");
   const [newItem, setNewItem] = useState({
     title: "",
     content: "",
     sourceType: "text",
     sourceUrl: "",
   });
+  const [urlInput, setUrlInput] = useState("");
+  const [urlTitle, setUrlTitle] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileTitle, setFileTitle] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: chatbots, isLoading: isLoadingChatbots } = useQuery<Chatbot[]>({
     queryKey: ["/api/chatbots"],
@@ -66,11 +73,10 @@ export default function KnowledgeBase() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
       toast({
-        title: "Item added",
+        title: "Content added",
         description: "Knowledge base item has been added successfully.",
       });
-      setAddDialogOpen(false);
-      setNewItem({ title: "", content: "", sourceType: "text", sourceUrl: "" });
+      resetDialog();
     },
     onError: () => {
       toast({
@@ -80,6 +86,67 @@ export default function KnowledgeBase() {
       });
     },
   });
+
+  const uploadFileMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/knowledge-base/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Upload failed");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
+      toast({
+        title: "File uploaded",
+        description: "File content has been extracted and added to the knowledge base.",
+      });
+      resetDialog();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Upload failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const extractUrlMutation = useMutation({
+    mutationFn: async (data: { chatbotId: number; url: string; title?: string }) => {
+      const response = await apiRequest("POST", "/api/knowledge-base/url", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
+      toast({
+        title: "URL content extracted",
+        description: "Web page content has been added to the knowledge base.",
+      });
+      resetDialog();
+    },
+    onError: () => {
+      toast({
+        title: "Extraction failed",
+        description: "Could not extract content from the URL. Please check the URL and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetDialog = () => {
+    setAddDialogOpen(false);
+    setNewItem({ title: "", content: "", sourceType: "text", sourceUrl: "" });
+    setUrlInput("");
+    setUrlTitle("");
+    setSelectedFile(null);
+    setFileTitle("");
+    setActiveTab("text");
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -255,7 +322,7 @@ export default function KnowledgeBase() {
         </Card>
       )}
 
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+      <Dialog open={addDialogOpen} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Knowledge Base Content</DialogTitle>
@@ -263,65 +330,163 @@ export default function KnowledgeBase() {
               Add content that your chatbot can reference when answering questions.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title</label>
-              <Input
-                value={newItem.title}
-                onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
-                placeholder="e.g., Product FAQ"
-                data-testid="input-kb-title"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Source Type</label>
-              <Select
-                value={newItem.sourceType}
-                onValueChange={(value) => setNewItem({ ...newItem, sourceType: value })}
-              >
-                <SelectTrigger data-testid="select-source-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="text">Text Content</SelectItem>
-                  <SelectItem value="url">URL Source</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {newItem.sourceType === "url" && (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="text" data-testid="tab-text">
+                <FileText className="h-4 w-4 mr-2" />
+                Text
+              </TabsTrigger>
+              <TabsTrigger value="file" data-testid="tab-file">
+                <File className="h-4 w-4 mr-2" />
+                File
+              </TabsTrigger>
+              <TabsTrigger value="url" data-testid="tab-url">
+                <Globe className="h-4 w-4 mr-2" />
+                URL
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="text" className="space-y-4 mt-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Source URL</label>
+                <label className="text-sm font-medium">Title</label>
                 <Input
-                  value={newItem.sourceUrl}
-                  onChange={(e) => setNewItem({ ...newItem, sourceUrl: e.target.value })}
-                  placeholder="https://example.com/page"
-                  data-testid="input-kb-url"
+                  value={newItem.title}
+                  onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
+                  placeholder="e.g., Product FAQ"
+                  data-testid="input-kb-title"
                 />
               </div>
-            )}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Content</label>
-              <Textarea
-                value={newItem.content}
-                onChange={(e) => setNewItem({ ...newItem, content: e.target.value })}
-                placeholder="Enter the content your chatbot should know..."
-                className="min-h-32 resize-none"
-                data-testid="input-kb-content"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAdd}
-              disabled={!newItem.title || !newItem.content || addMutation.isPending}
-              data-testid="button-confirm-add"
-            >
-              {addMutation.isPending ? "Adding..." : "Add Content"}
-            </Button>
-          </DialogFooter>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Content</label>
+                <Textarea
+                  value={newItem.content}
+                  onChange={(e) => setNewItem({ ...newItem, content: e.target.value })}
+                  placeholder="Enter the content your chatbot should know..."
+                  className="min-h-32 resize-none"
+                  data-testid="input-kb-content"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={resetDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAdd}
+                  disabled={!newItem.title || !newItem.content || addMutation.isPending}
+                  data-testid="button-confirm-add"
+                >
+                  {addMutation.isPending ? "Adding..." : "Add Content"}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+
+            <TabsContent value="file" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Title (optional)</label>
+                <Input
+                  value={fileTitle}
+                  onChange={(e) => setFileTitle(e.target.value)}
+                  placeholder="Leave empty to use filename"
+                  data-testid="input-file-title"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Upload File</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                  data-testid="input-file"
+                />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
+                >
+                  {selectedFile ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <File className="h-8 w-8 text-primary" />
+                      <p className="font-medium">{selectedFile.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {(selectedFile.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                      <p className="font-medium">Click to upload</p>
+                      <p className="text-sm text-muted-foreground">
+                        PDF, DOC, DOCX, or TXT (max 10MB)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={resetDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!selectedFile || !selectedChatbot) return;
+                    const formData = new FormData();
+                    formData.append("file", selectedFile);
+                    formData.append("chatbotId", selectedChatbot);
+                    if (fileTitle) formData.append("title", fileTitle);
+                    uploadFileMutation.mutate(formData);
+                  }}
+                  disabled={!selectedFile || uploadFileMutation.isPending}
+                  data-testid="button-upload-file"
+                >
+                  {uploadFileMutation.isPending ? "Uploading..." : "Upload File"}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+
+            <TabsContent value="url" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Title (optional)</label>
+                <Input
+                  value={urlTitle}
+                  onChange={(e) => setUrlTitle(e.target.value)}
+                  placeholder="Leave empty to use page title"
+                  data-testid="input-url-title"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Web Page URL</label>
+                <Input
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="https://example.com/page"
+                  data-testid="input-url"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter a URL to extract its content for your chatbot&apos;s knowledge base.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={resetDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!urlInput || !selectedChatbot) return;
+                    extractUrlMutation.mutate({
+                      chatbotId: parseInt(selectedChatbot),
+                      url: urlInput,
+                      title: urlTitle || undefined,
+                    });
+                  }}
+                  disabled={!urlInput || extractUrlMutation.isPending}
+                  data-testid="button-extract-url"
+                >
+                  {extractUrlMutation.isPending ? "Extracting..." : "Extract Content"}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
