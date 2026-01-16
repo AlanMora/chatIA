@@ -18,34 +18,34 @@ export default function Dashboard() {
 
   const stats = [
     {
-      title: "Active Chatbots",
+      title: "Chatbots Activos",
       value: activeChatbots.length,
       icon: Bot,
-      description: "Currently deployed",
+      description: "Desplegados actualmente",
       color: "text-blue-500",
       bgColor: "bg-blue-500/10",
     },
     {
-      title: "Total Conversations",
+      title: "Conversaciones",
       value: totalConversations,
       icon: MessageSquare,
-      description: "All time",
+      description: "Total histórico",
       color: "text-green-500",
       bgColor: "bg-green-500/10",
     },
     {
-      title: "Total Messages",
+      title: "Mensajes",
       value: totalMessages,
       icon: Users,
-      description: "Exchanged",
+      description: "Intercambiados",
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
     },
     {
-      title: "Avg Response Time",
+      title: "Tiempo de Respuesta",
       value: "1.2s",
       icon: TrendingUp,
-      description: "Last 24 hours",
+      description: "Últimas 24 horas",
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
     },
@@ -54,9 +54,9 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-8 p-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold">Dashboard</h1>
+        <h1 className="text-3xl font-semibold">Inicio</h1>
         <p className="text-muted-foreground">
-          Welcome back! Here's an overview of your chatbot platform.
+          ¡Bienvenido! Aquí tienes un resumen de tu plataforma de chatbots.
         </p>
       </div>
 
@@ -83,13 +83,13 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
-              <CardTitle>Your Chatbots</CardTitle>
-              <CardDescription>Manage your AI chatbots</CardDescription>
+              <CardTitle>Tus Chatbots</CardTitle>
+              <CardDescription>Administra tus chatbots de IA</CardDescription>
             </div>
             <Button asChild data-testid="button-create-chatbot">
               <Link href="/chatbots/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Create New
+                Crear Nuevo
               </Link>
             </Button>
           </CardHeader>
@@ -125,11 +125,11 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{chatbot.name}</span>
                         <Badge variant={chatbot.isActive ? "default" : "secondary"} className="text-xs">
-                          {chatbot.isActive ? "Active" : "Inactive"}
+                          {chatbot.isActive ? "Activo" : "Inactivo"}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {chatbot.description || "No description"}
+                        {chatbot.description || "Sin descripción"}
                       </p>
                     </div>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -141,14 +141,14 @@ export default function Dashboard() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                   <Bot className="h-6 w-6 text-muted-foreground" />
                 </div>
-                <h3 className="mt-4 font-medium">No chatbots yet</h3>
+                <h3 className="mt-4 font-medium">No hay chatbots aún</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Create your first AI chatbot to get started
+                  Crea tu primer chatbot de IA para comenzar
                 </p>
                 <Button asChild className="mt-4" data-testid="button-create-first-chatbot">
                   <Link href="/chatbots/new">
                     <Plus className="mr-2 h-4 w-4" />
-                    Create Chatbot
+                    Crear Chatbot
                   </Link>
                 </Button>
               </div>
@@ -158,31 +158,31 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Quick Start Guide</CardTitle>
-            <CardDescription>Get your chatbot up and running</CardDescription>
+            <CardTitle>Guía de Inicio Rápido</CardTitle>
+            <CardDescription>Pon tu chatbot en funcionamiento</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {[
                 {
                   step: 1,
-                  title: "Create a Chatbot",
-                  description: "Configure your AI assistant with a name, personality, and appearance.",
+                  title: "Crea un Chatbot",
+                  description: "Configura tu asistente de IA con un nombre, personalidad y apariencia.",
                 },
                 {
                   step: 2,
-                  title: "Add Knowledge Base",
-                  description: "Upload documents or add content to train your chatbot.",
+                  title: "Agrega Base de Conocimiento",
+                  description: "Sube documentos o agrega contenido para entrenar tu chatbot.",
                 },
                 {
                   step: 3,
-                  title: "Get Embed Code",
-                  description: "Copy the script and paste it on your website.",
+                  title: "Obtén el Código",
+                  description: "Copia el script y pégalo en tu sitio web.",
                 },
                 {
                   step: 4,
-                  title: "Go Live",
-                  description: "Your chatbot is now ready to assist your visitors!",
+                  title: "¡Listo!",
+                  description: "Tu chatbot está listo para asistir a tus visitantes.",
                 },
               ].map((item) => (
                 <div key={item.step} className="flex gap-4" data-testid={`step-${item.step}`}>

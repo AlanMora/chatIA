@@ -23,7 +23,7 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
     {
       id: "welcome",
       role: "assistant",
-      content: chatbot.welcomeMessage || "Hello! How can I help you today?",
+      content: chatbot.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -42,7 +42,7 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
         {
           id: "welcome",
           role: "assistant",
-          content: chatbot.welcomeMessage || "Hello! How can I help you today?",
+          content: chatbot.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
         },
       ]);
     }
@@ -66,7 +66,7 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
         const botMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "This is a preview mode. The actual response will come from the AI when deployed.",
+          content: "Este es el modo vista previa. La respuesta real vendrá de la IA cuando se despliegue.",
         };
         setMessages((prev) => [...prev, botMessage]);
         setIsLoading(false);
@@ -90,10 +90,10 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to send message");
+      if (!response.ok) throw new Error("Error al enviar mensaje");
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("No reader available");
+      if (!reader) throw new Error("No hay lector disponible");
 
       const botMessageId = (Date.now() + 1).toString();
       setMessages((prev) => [
@@ -126,19 +126,19 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
                 );
               }
             } catch (e) {
-              // Ignore parse errors
+              // Ignorar errores de parseo
             }
           }
         }
       }
     } catch (error) {
-      console.error("Chat error:", error);
+      console.error("Error de chat:", error);
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
+          content: "Lo siento, encontré un error. Por favor, inténtalo de nuevo.",
         },
       ]);
     } finally {
@@ -195,7 +195,7 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-green-400"></span>
               <span className="text-xs opacity-80" style={{ color: chatbot.textColor || "#FFFFFF" }}>
-                Online
+                En línea
               </span>
             </div>
           </div>
@@ -266,7 +266,7 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
               </div>
               <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Thinking...</span>
+                <span className="text-sm text-muted-foreground">Pensando...</span>
               </div>
             </div>
           )}
@@ -284,7 +284,7 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message..."
+            placeholder="Escribe un mensaje..."
             disabled={isLoading}
             className="flex-1"
             data-testid="input-chat-message"

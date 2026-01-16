@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,7 +26,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Save, Eye, Bot } from "lucide-react";
+import { ArrowLeft, Save, Eye } from "lucide-react";
 import { Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -35,7 +34,7 @@ import { ChatWidget } from "@/components/chat-widget";
 import type { Chatbot } from "@shared/schema";
 
 const chatbotFormSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
+  name: z.string().min(1, "El nombre es obligatorio").max(100),
   description: z.string().max(500).optional(),
   systemPrompt: z.string().max(2000).optional(),
   aiModel: z.string(),
@@ -52,17 +51,17 @@ const chatbotFormSchema = z.object({
 type ChatbotFormValues = z.infer<typeof chatbotFormSchema>;
 
 const AI_MODELS = [
-  { value: "gpt-5", label: "GPT-5 (Latest)", provider: "openai" },
+  { value: "gpt-5", label: "GPT-5 (Último)", provider: "openai" },
   { value: "gpt-5.1", label: "GPT-5.1", provider: "openai" },
   { value: "gpt-4o", label: "GPT-4o", provider: "openai" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini (Fast)", provider: "openai" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini (Rápido)", provider: "openai" },
 ];
 
 const POSITIONS = [
-  { value: "bottom-right", label: "Bottom Right" },
-  { value: "bottom-left", label: "Bottom Left" },
-  { value: "top-right", label: "Top Right" },
-  { value: "top-left", label: "Top Left" },
+  { value: "bottom-right", label: "Abajo Derecha" },
+  { value: "bottom-left", label: "Abajo Izquierda" },
+  { value: "top-right", label: "Arriba Derecha" },
+  { value: "top-left", label: "Arriba Izquierda" },
 ];
 
 export default function ChatbotEditor() {
@@ -82,13 +81,13 @@ export default function ChatbotEditor() {
     defaultValues: {
       name: "",
       description: "",
-      systemPrompt: "You are a helpful assistant.",
+      systemPrompt: "Eres un asistente útil.",
       aiModel: "gpt-5",
       aiProvider: "openai",
       primaryColor: "#3B82F6",
       textColor: "#FFFFFF",
       position: "bottom-right",
-      welcomeMessage: "Hello! How can I help you today?",
+      welcomeMessage: "¡Hola! ¿En qué puedo ayudarte?",
       temperature: "0.7",
       maxTokens: 1024,
       isActive: true,
@@ -96,13 +95,13 @@ export default function ChatbotEditor() {
     values: chatbot ? {
       name: chatbot.name,
       description: chatbot.description || "",
-      systemPrompt: chatbot.systemPrompt || "You are a helpful assistant.",
+      systemPrompt: chatbot.systemPrompt || "Eres un asistente útil.",
       aiModel: chatbot.aiModel || "gpt-5",
       aiProvider: chatbot.aiProvider || "openai",
       primaryColor: chatbot.primaryColor || "#3B82F6",
       textColor: chatbot.textColor || "#FFFFFF",
       position: chatbot.position || "bottom-right",
-      welcomeMessage: chatbot.welcomeMessage || "Hello! How can I help you today?",
+      welcomeMessage: chatbot.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
       temperature: chatbot.temperature || "0.7",
       maxTokens: chatbot.maxTokens || 1024,
       isActive: chatbot.isActive ?? true,
@@ -117,15 +116,15 @@ export default function ChatbotEditor() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/chatbots"] });
       toast({
-        title: "Chatbot created",
-        description: "Your chatbot has been created successfully.",
+        title: "Chatbot creado",
+        description: "Tu chatbot ha sido creado correctamente.",
       });
       setLocation(`/chatbots/${data.id}`);
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to create chatbot. Please try again.",
+        description: "No se pudo crear el chatbot. Inténtalo de nuevo.",
         variant: "destructive",
       });
     },
@@ -140,14 +139,14 @@ export default function ChatbotEditor() {
       queryClient.invalidateQueries({ queryKey: ["/api/chatbots"] });
       queryClient.invalidateQueries({ queryKey: ["/api/chatbots", chatbotId] });
       toast({
-        title: "Chatbot updated",
-        description: "Your changes have been saved.",
+        title: "Chatbot actualizado",
+        description: "Tus cambios han sido guardados.",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to update chatbot. Please try again.",
+        description: "No se pudo actualizar el chatbot. Inténtalo de nuevo.",
         variant: "destructive",
       });
     },
@@ -194,10 +193,10 @@ export default function ChatbotEditor() {
         </Button>
         <div className="flex-1">
           <h1 className="text-3xl font-semibold">
-            {isNew ? "Create Chatbot" : "Edit Chatbot"}
+            {isNew ? "Crear Chatbot" : "Editar Chatbot"}
           </h1>
           <p className="text-muted-foreground">
-            {isNew ? "Configure your new AI chatbot" : `Editing ${chatbot?.name}`}
+            {isNew ? "Configura tu nuevo chatbot de IA" : `Editando ${chatbot?.name}`}
           </p>
         </div>
         <Button
@@ -206,7 +205,7 @@ export default function ChatbotEditor() {
           data-testid="button-save"
         >
           <Save className="mr-2 h-4 w-4" />
-          {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save Changes"}
+          {createMutation.isPending || updateMutation.isPending ? "Guardando..." : "Guardar Cambios"}
         </Button>
       </div>
 
@@ -216,16 +215,16 @@ export default function ChatbotEditor() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Tabs defaultValue="basic" className="w-full">
                 <TabsList className="w-full">
-                  <TabsTrigger value="basic" className="flex-1" data-testid="tab-basic">Basic</TabsTrigger>
-                  <TabsTrigger value="ai" className="flex-1" data-testid="tab-ai">AI Settings</TabsTrigger>
-                  <TabsTrigger value="appearance" className="flex-1" data-testid="tab-appearance">Appearance</TabsTrigger>
+                  <TabsTrigger value="basic" className="flex-1" data-testid="tab-basic">Básico</TabsTrigger>
+                  <TabsTrigger value="ai" className="flex-1" data-testid="tab-ai">Configuración IA</TabsTrigger>
+                  <TabsTrigger value="appearance" className="flex-1" data-testid="tab-appearance">Apariencia</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="basic" className="mt-4 space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Basic Information</CardTitle>
-                      <CardDescription>Set up the basic details of your chatbot</CardDescription>
+                      <CardTitle>Información Básica</CardTitle>
+                      <CardDescription>Configura los detalles básicos de tu chatbot</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <FormField
@@ -233,9 +232,9 @@ export default function ChatbotEditor() {
                         name="name"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Name</FormLabel>
+                            <FormLabel>Nombre</FormLabel>
                             <FormControl>
-                              <Input placeholder="My Chatbot" {...field} data-testid="input-name" />
+                              <Input placeholder="Mi Chatbot" {...field} data-testid="input-name" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -247,17 +246,17 @@ export default function ChatbotEditor() {
                         name="description"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Description</FormLabel>
+                            <FormLabel>Descripción</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="A helpful assistant for..."
+                                placeholder="Un asistente útil para..."
                                 className="resize-none"
                                 {...field}
                                 data-testid="input-description"
                               />
                             </FormControl>
                             <FormDescription>
-                              Brief description of what this chatbot does
+                              Breve descripción de lo que hace este chatbot
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -269,17 +268,17 @@ export default function ChatbotEditor() {
                         name="welcomeMessage"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Welcome Message</FormLabel>
+                            <FormLabel>Mensaje de Bienvenida</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="Hello! How can I help you today?"
+                                placeholder="¡Hola! ¿En qué puedo ayudarte?"
                                 className="resize-none"
                                 {...field}
                                 data-testid="input-welcome"
                               />
                             </FormControl>
                             <FormDescription>
-                              First message shown when the chat opens
+                              Primer mensaje que se muestra al abrir el chat
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -292,9 +291,9 @@ export default function ChatbotEditor() {
                         render={({ field }) => (
                           <FormItem className="flex items-center justify-between rounded-lg border p-4">
                             <div className="space-y-0.5">
-                              <FormLabel>Active</FormLabel>
+                              <FormLabel>Activo</FormLabel>
                               <FormDescription>
-                                Enable or disable this chatbot
+                                Habilitar o deshabilitar este chatbot
                               </FormDescription>
                             </div>
                             <FormControl>
@@ -314,8 +313,8 @@ export default function ChatbotEditor() {
                 <TabsContent value="ai" className="mt-4 space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle>AI Configuration</CardTitle>
-                      <CardDescription>Configure the AI model and behavior</CardDescription>
+                      <CardTitle>Configuración de IA</CardTitle>
+                      <CardDescription>Configura el modelo de IA y su comportamiento</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <FormField
@@ -323,11 +322,11 @@ export default function ChatbotEditor() {
                         name="aiModel"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>AI Model</FormLabel>
+                            <FormLabel>Modelo de IA</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger data-testid="select-model">
-                                  <SelectValue placeholder="Select a model" />
+                                  <SelectValue placeholder="Selecciona un modelo" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -348,17 +347,17 @@ export default function ChatbotEditor() {
                         name="systemPrompt"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>System Prompt</FormLabel>
+                            <FormLabel>Prompt del Sistema</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="You are a helpful assistant..."
+                                placeholder="Eres un asistente útil..."
                                 className="min-h-32 resize-none"
                                 {...field}
                                 data-testid="input-system-prompt"
                               />
                             </FormControl>
                             <FormDescription>
-                              Instructions that define your chatbot's personality and behavior
+                              Instrucciones que definen la personalidad y comportamiento del chatbot
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -370,7 +369,7 @@ export default function ChatbotEditor() {
                         name="temperature"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Temperature: {field.value}</FormLabel>
+                            <FormLabel>Temperatura: {field.value}</FormLabel>
                             <FormControl>
                               <input
                                 type="range"
@@ -384,7 +383,7 @@ export default function ChatbotEditor() {
                               />
                             </FormControl>
                             <FormDescription>
-                              Lower values make responses more focused, higher values more creative
+                              Valores bajos = respuestas más enfocadas, valores altos = más creativos
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -396,12 +395,12 @@ export default function ChatbotEditor() {
                         name="maxTokens"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Max Tokens</FormLabel>
+                            <FormLabel>Tokens Máximos</FormLabel>
                             <FormControl>
                               <Input type="number" {...field} data-testid="input-max-tokens" />
                             </FormControl>
                             <FormDescription>
-                              Maximum length of responses (100-8192)
+                              Longitud máxima de las respuestas (100-8192)
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -414,8 +413,8 @@ export default function ChatbotEditor() {
                 <TabsContent value="appearance" className="mt-4 space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Appearance</CardTitle>
-                      <CardDescription>Customize how your chatbot looks</CardDescription>
+                      <CardTitle>Apariencia</CardTitle>
+                      <CardDescription>Personaliza cómo se ve tu chatbot</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <FormField
@@ -423,7 +422,7 @@ export default function ChatbotEditor() {
                         name="primaryColor"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Primary Color</FormLabel>
+                            <FormLabel>Color Principal</FormLabel>
                             <div className="flex items-center gap-3">
                               <FormControl>
                                 <Input
@@ -450,7 +449,7 @@ export default function ChatbotEditor() {
                         name="textColor"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Text Color</FormLabel>
+                            <FormLabel>Color del Texto</FormLabel>
                             <div className="flex items-center gap-3">
                               <FormControl>
                                 <Input
@@ -477,11 +476,11 @@ export default function ChatbotEditor() {
                         name="position"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Widget Position</FormLabel>
+                            <FormLabel>Posición del Widget</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger data-testid="select-position">
-                                  <SelectValue placeholder="Select position" />
+                                  <SelectValue placeholder="Selecciona posición" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -493,7 +492,7 @@ export default function ChatbotEditor() {
                               </SelectContent>
                             </Select>
                             <FormDescription>
-                              Where the chat widget appears on your website
+                              Dónde aparecerá el widget de chat en tu sitio web
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -511,8 +510,8 @@ export default function ChatbotEditor() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
-                <CardTitle>Preview</CardTitle>
-                <CardDescription>See how your chatbot will look</CardDescription>
+                <CardTitle>Vista Previa</CardTitle>
+                <CardDescription>Así se verá tu chatbot</CardDescription>
               </div>
               <Eye className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
@@ -521,15 +520,15 @@ export default function ChatbotEditor() {
                 <ChatWidget
                   chatbot={{
                     id: chatbotId || 0,
-                    name: watchedValues.name || "My Chatbot",
+                    name: watchedValues.name || "Mi Chatbot",
                     description: watchedValues.description || null,
-                    systemPrompt: watchedValues.systemPrompt || "You are a helpful assistant.",
+                    systemPrompt: watchedValues.systemPrompt || "Eres un asistente útil.",
                     aiModel: watchedValues.aiModel || "gpt-5",
                     aiProvider: watchedValues.aiProvider || "openai",
                     primaryColor: watchedValues.primaryColor || "#3B82F6",
                     textColor: watchedValues.textColor || "#FFFFFF",
                     position: watchedValues.position || "bottom-right",
-                    welcomeMessage: watchedValues.welcomeMessage || "Hello! How can I help you today?",
+                    welcomeMessage: watchedValues.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
                     temperature: watchedValues.temperature || "0.7",
                     maxTokens: watchedValues.maxTokens || 1024,
                     isActive: watchedValues.isActive ?? true,

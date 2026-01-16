@@ -23,7 +23,7 @@ import {
 
 const menuItems = [
   {
-    title: "Dashboard",
+    title: "Inicio",
     url: "/",
     icon: Home,
   },
@@ -33,17 +33,17 @@ const menuItems = [
     icon: Bot,
   },
   {
-    title: "Knowledge Base",
+    title: "Base de Conocimiento",
     url: "/knowledge-base",
     icon: BookOpen,
   },
   {
-    title: "Embed Code",
+    title: "Código de Inserción",
     url: "/embed",
     icon: Code2,
   },
   {
-    title: "Analytics",
+    title: "Estadísticas",
     url: "/analytics",
     icon: BarChart3,
   },
@@ -61,13 +61,13 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col">
             <span className="text-base font-semibold text-sidebar-foreground">ChatBot AI</span>
-            <span className="text-xs text-muted-foreground">Platform</span>
+            <span className="text-xs text-muted-foreground">Plataforma</span>
           </div>
         </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
+          <SidebarGroupLabel>Menú</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
@@ -91,10 +91,10 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Settings">
+            <SidebarMenuButton asChild tooltip="Configuración">
               <Link href="/settings" data-testid="link-settings">
                 <Settings className="h-4 w-4" />
-                <span>Settings</span>
+                <span>Configuración</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

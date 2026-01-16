@@ -13,9 +13,9 @@ export default function Settings() {
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
-        <h1 className="text-3xl font-semibold">Settings</h1>
+        <h1 className="text-3xl font-semibold">Configuración</h1>
         <p className="text-muted-foreground">
-          Manage your account and platform preferences
+          Administra tu cuenta y preferencias de la plataforma
         </p>
       </div>
 
@@ -24,20 +24,20 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sun className="h-5 w-5" />
-              Appearance
+              Apariencia
             </CardTitle>
             <CardDescription>
-              Customize how the platform looks for you
+              Personaliza cómo se ve la plataforma para ti
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-3">
-              <Label>Theme</Label>
+              <Label>Tema</Label>
               <div className="flex gap-2">
                 {[
-                  { value: "light", label: "Light", icon: Sun },
-                  { value: "dark", label: "Dark", icon: Moon },
-                  { value: "system", label: "System", icon: Monitor },
+                  { value: "light", label: "Claro", icon: Sun },
+                  { value: "dark", label: "Oscuro", icon: Moon },
+                  { value: "system", label: "Sistema", icon: Monitor },
                 ].map((t) => (
                   <Button
                     key={t.value}
@@ -59,28 +59,28 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
-              Notifications
+              Notificaciones
             </CardTitle>
             <CardDescription>
-              Configure how you receive notifications
+              Configura cómo recibes las notificaciones
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {[
               {
                 id: "email-notifications",
-                label: "Email Notifications",
-                description: "Receive updates via email",
+                label: "Notificaciones por Email",
+                description: "Recibe actualizaciones por correo electrónico",
               },
               {
                 id: "browser-notifications",
-                label: "Browser Notifications",
-                description: "Get notified in your browser",
+                label: "Notificaciones del Navegador",
+                description: "Recibe notificaciones en tu navegador",
               },
               {
                 id: "weekly-digest",
-                label: "Weekly Digest",
-                description: "Get a summary every week",
+                label: "Resumen Semanal",
+                description: "Recibe un resumen cada semana",
               },
             ].map((item) => (
               <div key={item.id} className="flex items-center justify-between">
@@ -98,15 +98,15 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Key className="h-5 w-5" />
-              API Keys
+              Claves API
             </CardTitle>
             <CardDescription>
-              Manage external API integrations
+              Administra las integraciones de API externas
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="openai-key">OpenAI API Key (Optional)</Label>
+              <Label htmlFor="openai-key">Clave API de OpenAI (Opcional)</Label>
               <div className="flex gap-2">
                 <Input
                   id="openai-key"
@@ -120,12 +120,12 @@ export default function Settings() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                By default, we use Replit AI Integrations. Add your own key for more control.
+                Por defecto, usamos las integraciones de IA de Replit. Agrega tu propia clave para más control.
               </p>
             </div>
             <Separator />
             <div className="space-y-2">
-              <Label htmlFor="anthropic-key">Anthropic API Key (Optional)</Label>
+              <Label htmlFor="anthropic-key">Clave API de Anthropic (Opcional)</Label>
               <div className="flex gap-2">
                 <Input
                   id="anthropic-key"
@@ -146,41 +146,41 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              Security
+              Seguridad
             </CardTitle>
             <CardDescription>
-              Manage your account security settings
+              Administra la configuración de seguridad de tu cuenta
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Two-Factor Authentication</Label>
+                <Label>Autenticación de Dos Factores</Label>
                 <p className="text-sm text-muted-foreground">
-                  Add an extra layer of security
+                  Agrega una capa extra de seguridad
                 </p>
               </div>
-              <Button variant="outline" data-testid="button-enable-2fa">Enable</Button>
+              <Button variant="outline" data-testid="button-enable-2fa">Activar</Button>
             </div>
             <Separator />
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label>Active Sessions</Label>
+                <Label>Sesiones Activas</Label>
                 <p className="text-sm text-muted-foreground">
-                  Manage devices logged into your account
+                  Administra los dispositivos conectados a tu cuenta
                 </p>
               </div>
-              <Button variant="outline" data-testid="button-view-sessions">View</Button>
+              <Button variant="outline" data-testid="button-view-sessions">Ver</Button>
             </div>
             <Separator />
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-destructive">Delete Account</Label>
+                <Label className="text-destructive">Eliminar Cuenta</Label>
                 <p className="text-sm text-muted-foreground">
-                  Permanently delete your account and data
+                  Elimina permanentemente tu cuenta y datos
                 </p>
               </div>
-              <Button variant="destructive" data-testid="button-delete-account">Delete</Button>
+              <Button variant="destructive" data-testid="button-delete-account">Eliminar</Button>
             </div>
           </CardContent>
         </Card>

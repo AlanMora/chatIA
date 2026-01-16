@@ -42,8 +42,8 @@ export default function Chatbots() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/chatbots"] });
       toast({
-        title: "Chatbot deleted",
-        description: "The chatbot has been successfully deleted.",
+        title: "Chatbot eliminado",
+        description: "El chatbot ha sido eliminado correctamente.",
       });
       setDeleteDialogOpen(false);
       setSelectedChatbot(null);
@@ -51,7 +51,7 @@ export default function Chatbots() {
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to delete the chatbot. Please try again.",
+        description: "No se pudo eliminar el chatbot. Inténtalo de nuevo.",
         variant: "destructive",
       });
     },
@@ -68,13 +68,13 @@ export default function Chatbots() {
         <div>
           <h1 className="text-3xl font-semibold">Chatbots</h1>
           <p className="text-muted-foreground">
-            Create and manage your AI chatbots
+            Crea y administra tus chatbots de IA
           </p>
         </div>
         <Button asChild data-testid="button-new-chatbot">
           <Link href="/chatbots/new">
             <Plus className="mr-2 h-4 w-4" />
-            New Chatbot
+            Nuevo Chatbot
           </Link>
         </Button>
       </div>
@@ -117,11 +117,11 @@ export default function Chatbots() {
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold truncate">{chatbot.name}</h3>
                         <Badge variant={chatbot.isActive ? "default" : "secondary"} className="text-xs shrink-0">
-                          {chatbot.isActive ? "Active" : "Inactive"}
+                          {chatbot.isActive ? "Activo" : "Inactivo"}
                         </Badge>
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                        {chatbot.description || "No description provided"}
+                        {chatbot.description || "Sin descripción"}
                       </p>
                       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="capitalize">{chatbot.aiProvider}</span>
@@ -140,19 +140,19 @@ export default function Chatbots() {
                       <DropdownMenuItem asChild>
                         <Link href={`/chatbots/${chatbot.id}`} className="flex items-center">
                           <Pencil className="mr-2 h-4 w-4" />
-                          Edit
+                          Editar
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <Link href={`/chatbots/${chatbot.id}/preview`} className="flex items-center">
                           <Eye className="mr-2 h-4 w-4" />
-                          Preview
+                          Vista Previa
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <Link href={`/embed?chatbot=${chatbot.id}`} className="flex items-center">
                           <Code2 className="mr-2 h-4 w-4" />
-                          Get Embed Code
+                          Obtener Código
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -161,7 +161,7 @@ export default function Chatbots() {
                         data-testid={`button-delete-${chatbot.id}`}
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
+                        Eliminar
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -176,14 +176,14 @@ export default function Chatbots() {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <Bot className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="mt-6 text-xl font-semibold">No chatbots yet</h3>
+            <h3 className="mt-6 text-xl font-semibold">No hay chatbots aún</h3>
             <p className="mt-2 text-center text-muted-foreground max-w-sm">
-              Create your first AI chatbot to start engaging with your website visitors.
+              Crea tu primer chatbot de IA para comenzar a interactuar con los visitantes de tu sitio web.
             </p>
             <Button asChild className="mt-6" data-testid="button-create-first">
               <Link href="/chatbots/new">
                 <Plus className="mr-2 h-4 w-4" />
-                Create Your First Chatbot
+                Crear Tu Primer Chatbot
               </Link>
             </Button>
           </CardContent>
@@ -193,19 +193,19 @@ export default function Chatbots() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Chatbot</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar Chatbot</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{selectedChatbot?.name}"? This action cannot be undone and will remove all associated conversations and knowledge base items.
+              ¿Estás seguro de que quieres eliminar "{selectedChatbot?.name}"? Esta acción no se puede deshacer y eliminará todas las conversaciones y elementos de la base de conocimiento asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => selectedChatbot && deleteMutation.mutate(selectedChatbot.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete"
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Eliminando..." : "Eliminar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

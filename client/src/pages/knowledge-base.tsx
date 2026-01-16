@@ -73,15 +73,15 @@ export default function KnowledgeBase() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
       toast({
-        title: "Content added",
-        description: "Knowledge base item has been added successfully.",
+        title: "Contenido agregado",
+        description: "El contenido ha sido agregado a la base de conocimiento.",
       });
       resetDialog();
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to add item. Please try again.",
+        description: "No se pudo agregar el contenido. Inténtalo de nuevo.",
         variant: "destructive",
       });
     },
@@ -95,21 +95,21 @@ export default function KnowledgeBase() {
       });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Upload failed");
+        throw new Error(error.error || "Error al subir");
       }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
       toast({
-        title: "File uploaded",
-        description: "File content has been extracted and added to the knowledge base.",
+        title: "Archivo subido",
+        description: "El contenido del archivo ha sido extraído y agregado a la base de conocimiento.",
       });
       resetDialog();
     },
     onError: (error: Error) => {
       toast({
-        title: "Upload failed",
+        title: "Error al subir",
         description: error.message,
         variant: "destructive",
       });
@@ -124,15 +124,15 @@ export default function KnowledgeBase() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
       toast({
-        title: "URL content extracted",
-        description: "Web page content has been added to the knowledge base.",
+        title: "Contenido extraído",
+        description: "El contenido de la página web ha sido agregado a la base de conocimiento.",
       });
       resetDialog();
     },
     onError: () => {
       toast({
-        title: "Extraction failed",
-        description: "Could not extract content from the URL. Please check the URL and try again.",
+        title: "Error de extracción",
+        description: "No se pudo extraer el contenido de la URL. Verifica la URL e inténtalo de nuevo.",
         variant: "destructive",
       });
     },
@@ -155,8 +155,8 @@ export default function KnowledgeBase() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
       toast({
-        title: "Item deleted",
-        description: "Knowledge base item has been deleted.",
+        title: "Contenido eliminado",
+        description: "El contenido ha sido eliminado de la base de conocimiento.",
       });
       setDeleteDialogOpen(false);
       setSelectedItem(null);
@@ -164,7 +164,7 @@ export default function KnowledgeBase() {
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to delete item. Please try again.",
+        description: "No se pudo eliminar el contenido. Inténtalo de nuevo.",
         variant: "destructive",
       });
     },
@@ -194,13 +194,24 @@ export default function KnowledgeBase() {
     }
   };
 
+  const getSourceLabel = (type: string) => {
+    switch (type) {
+      case "url":
+        return "URL";
+      case "file":
+        return "Archivo";
+      default:
+        return "Texto";
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">Knowledge Base</h1>
+          <h1 className="text-3xl font-semibold">Base de Conocimiento</h1>
           <p className="text-muted-foreground">
-            Add content to train your chatbots
+            Agrega contenido para entrenar tus chatbots
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -209,7 +220,7 @@ export default function KnowledgeBase() {
           ) : (
             <Select value={selectedChatbot} onValueChange={setSelectedChatbot}>
               <SelectTrigger className="w-48" data-testid="select-chatbot">
-                <SelectValue placeholder="Select a chatbot" />
+                <SelectValue placeholder="Selecciona un chatbot" />
               </SelectTrigger>
               <SelectContent>
                 {chatbots?.map((chatbot) => (
@@ -226,7 +237,7 @@ export default function KnowledgeBase() {
             data-testid="button-add-item"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Add Content
+            Agregar Contenido
           </Button>
         </div>
       </div>
@@ -237,9 +248,9 @@ export default function KnowledgeBase() {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <BookOpen className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="mt-6 text-xl font-semibold">Select a Chatbot</h3>
+            <h3 className="mt-6 text-xl font-semibold">Selecciona un Chatbot</h3>
             <p className="mt-2 text-center text-muted-foreground max-w-sm">
-              Choose a chatbot from the dropdown above to manage its knowledge base.
+              Elige un chatbot del menú desplegable para administrar su base de conocimiento.
             </p>
           </CardContent>
         </Card>
@@ -269,8 +280,8 @@ export default function KnowledgeBase() {
                   <div className="min-w-0">
                     <CardTitle className="text-base truncate">{item.title}</CardTitle>
                     <CardDescription className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="text-xs capitalize">
-                        {item.sourceType || "text"}
+                      <Badge variant="secondary" className="text-xs">
+                        {getSourceLabel(item.sourceType || "text")}
                       </Badge>
                     </CardDescription>
                   </div>
@@ -310,13 +321,13 @@ export default function KnowledgeBase() {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <BookOpen className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="mt-6 text-xl font-semibold">No knowledge base items</h3>
+            <h3 className="mt-6 text-xl font-semibold">Sin contenido aún</h3>
             <p className="mt-2 text-center text-muted-foreground max-w-sm">
-              Add content to help your chatbot answer questions more accurately.
+              Agrega contenido para ayudar a tu chatbot a responder preguntas con más precisión.
             </p>
             <Button className="mt-6" onClick={() => setAddDialogOpen(true)} data-testid="button-add-first">
               <Plus className="mr-2 h-4 w-4" />
-              Add Your First Content
+              Agregar Tu Primer Contenido
             </Button>
           </CardContent>
         </Card>
@@ -325,20 +336,20 @@ export default function KnowledgeBase() {
       <Dialog open={addDialogOpen} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add Knowledge Base Content</DialogTitle>
+            <DialogTitle>Agregar Contenido</DialogTitle>
             <DialogDescription>
-              Add content that your chatbot can reference when answering questions.
+              Agrega contenido que tu chatbot pueda usar para responder preguntas.
             </DialogDescription>
           </DialogHeader>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="text" data-testid="tab-text">
                 <FileText className="h-4 w-4 mr-2" />
-                Text
+                Texto
               </TabsTrigger>
               <TabsTrigger value="file" data-testid="tab-file">
                 <File className="h-4 w-4 mr-2" />
-                File
+                Archivo
               </TabsTrigger>
               <TabsTrigger value="url" data-testid="tab-url">
                 <Globe className="h-4 w-4 mr-2" />
@@ -348,50 +359,50 @@ export default function KnowledgeBase() {
 
             <TabsContent value="text" className="space-y-4 mt-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Title</label>
+                <label className="text-sm font-medium">Título</label>
                 <Input
                   value={newItem.title}
                   onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
-                  placeholder="e.g., Product FAQ"
+                  placeholder="ej. Preguntas Frecuentes"
                   data-testid="input-kb-title"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Content</label>
+                <label className="text-sm font-medium">Contenido</label>
                 <Textarea
                   value={newItem.content}
                   onChange={(e) => setNewItem({ ...newItem, content: e.target.value })}
-                  placeholder="Enter the content your chatbot should know..."
+                  placeholder="Escribe el contenido que tu chatbot debe conocer..."
                   className="min-h-32 resize-none"
                   data-testid="input-kb-content"
                 />
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={resetDialog}>
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button
                   onClick={handleAdd}
                   disabled={!newItem.title || !newItem.content || addMutation.isPending}
                   data-testid="button-confirm-add"
                 >
-                  {addMutation.isPending ? "Adding..." : "Add Content"}
+                  {addMutation.isPending ? "Agregando..." : "Agregar Contenido"}
                 </Button>
               </DialogFooter>
             </TabsContent>
 
             <TabsContent value="file" className="space-y-4 mt-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Title (optional)</label>
+                <label className="text-sm font-medium">Título (opcional)</label>
                 <Input
                   value={fileTitle}
                   onChange={(e) => setFileTitle(e.target.value)}
-                  placeholder="Leave empty to use filename"
+                  placeholder="Dejar vacío para usar el nombre del archivo"
                   data-testid="input-file-title"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Upload File</label>
+                <label className="text-sm font-medium">Subir Archivo</label>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -415,9 +426,9 @@ export default function KnowledgeBase() {
                   ) : (
                     <div className="flex flex-col items-center gap-2">
                       <Upload className="h-8 w-8 text-muted-foreground" />
-                      <p className="font-medium">Click to upload</p>
+                      <p className="font-medium">Haz clic para subir</p>
                       <p className="text-sm text-muted-foreground">
-                        PDF, DOC, DOCX, or TXT (max 10MB)
+                        PDF, DOC, DOCX o TXT (máx 10MB)
                       </p>
                     </div>
                   )}
@@ -425,7 +436,7 @@ export default function KnowledgeBase() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={resetDialog}>
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button
                   onClick={() => {
@@ -439,36 +450,36 @@ export default function KnowledgeBase() {
                   disabled={!selectedFile || uploadFileMutation.isPending}
                   data-testid="button-upload-file"
                 >
-                  {uploadFileMutation.isPending ? "Uploading..." : "Upload File"}
+                  {uploadFileMutation.isPending ? "Subiendo..." : "Subir Archivo"}
                 </Button>
               </DialogFooter>
             </TabsContent>
 
             <TabsContent value="url" className="space-y-4 mt-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Title (optional)</label>
+                <label className="text-sm font-medium">Título (opcional)</label>
                 <Input
                   value={urlTitle}
                   onChange={(e) => setUrlTitle(e.target.value)}
-                  placeholder="Leave empty to use page title"
+                  placeholder="Dejar vacío para usar el título de la página"
                   data-testid="input-url-title"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Web Page URL</label>
+                <label className="text-sm font-medium">URL de la Página Web</label>
                 <Input
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="https://example.com/page"
+                  placeholder="https://ejemplo.com/pagina"
                   data-testid="input-url"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Enter a URL to extract its content for your chatbot&apos;s knowledge base.
+                  Ingresa una URL para extraer su contenido para la base de conocimiento de tu chatbot.
                 </p>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={resetDialog}>
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button
                   onClick={() => {
@@ -482,7 +493,7 @@ export default function KnowledgeBase() {
                   disabled={!urlInput || extractUrlMutation.isPending}
                   data-testid="button-extract-url"
                 >
-                  {extractUrlMutation.isPending ? "Extracting..." : "Extract Content"}
+                  {extractUrlMutation.isPending ? "Extrayendo..." : "Extraer Contenido"}
                 </Button>
               </DialogFooter>
             </TabsContent>
@@ -493,18 +504,18 @@ export default function KnowledgeBase() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Content</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar Contenido</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{selectedItem?.title}"? This action cannot be undone.
+              ¿Estás seguro de que quieres eliminar "{selectedItem?.title}"? Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => selectedItem && deleteMutation.mutate(selectedItem.id)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Eliminando..." : "Eliminar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

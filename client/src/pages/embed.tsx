@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Code2, Copy, Check, Monitor, Tablet, Smartphone, ExternalLink } from "lucide-react";
+import { Code2, Copy, Check, Monitor, Tablet, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ChatWidget } from "@/components/chat-widget";
 import type { Chatbot } from "@shared/schema";
@@ -43,8 +43,8 @@ export default function EmbedPage() {
     await navigator.clipboard.writeText(embedCode);
     setCopied(true);
     toast({
-      title: "Copied!",
-      description: "Embed code copied to clipboard.",
+      title: "¡Copiado!",
+      description: "Código de inserción copiado al portapapeles.",
     });
     setTimeout(() => setCopied(false), 2000);
   };
@@ -59,9 +59,9 @@ export default function EmbedPage() {
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">Embed Code</h1>
+          <h1 className="text-3xl font-semibold">Código de Inserción</h1>
           <p className="text-muted-foreground">
-            Get the code to add your chatbot to any website
+            Obtén el código para agregar tu chatbot a cualquier sitio web
           </p>
         </div>
         {isLoading ? (
@@ -69,7 +69,7 @@ export default function EmbedPage() {
         ) : (
           <Select value={selectedChatbot} onValueChange={setSelectedChatbot}>
             <SelectTrigger className="w-56" data-testid="select-chatbot">
-              <SelectValue placeholder="Select a chatbot" />
+              <SelectValue placeholder="Selecciona un chatbot" />
             </SelectTrigger>
             <SelectContent>
               {chatbots?.map((chatbot) => (
@@ -94,9 +94,9 @@ export default function EmbedPage() {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <Code2 className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="mt-6 text-xl font-semibold">Select a Chatbot</h3>
+            <h3 className="mt-6 text-xl font-semibold">Selecciona un Chatbot</h3>
             <p className="mt-2 text-center text-muted-foreground max-w-sm">
-              Choose a chatbot from the dropdown above to get its embed code.
+              Elige un chatbot del menú desplegable para obtener su código de inserción.
             </p>
           </CardContent>
         </Card>
@@ -107,10 +107,10 @@ export default function EmbedPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Code2 className="h-5 w-5" />
-                  Embed Script
+                  Script de Inserción
                 </CardTitle>
                 <CardDescription>
-                  Copy this code and paste it before the closing &lt;/body&gt; tag of your website
+                  Copia este código y pégalo antes de la etiqueta &lt;/body&gt; de tu sitio web
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -128,12 +128,12 @@ export default function EmbedPage() {
                     {copied ? (
                       <>
                         <Check className="mr-2 h-4 w-4" />
-                        Copied
+                        Copiado
                       </>
                     ) : (
                       <>
                         <Copy className="mr-2 h-4 w-4" />
-                        Copy
+                        Copiar
                       </>
                     )}
                   </Button>
@@ -143,9 +143,9 @@ export default function EmbedPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Integration Guide</CardTitle>
+                <CardTitle>Guía de Integración</CardTitle>
                 <CardDescription>
-                  Follow these steps to add the chatbot to your website
+                  Sigue estos pasos para agregar el chatbot a tu sitio web
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -153,23 +153,23 @@ export default function EmbedPage() {
                   {[
                     {
                       step: 1,
-                      title: "Copy the embed code",
-                      description: "Click the copy button above to copy the script tag.",
+                      title: "Copia el código",
+                      description: "Haz clic en el botón copiar de arriba para copiar el script.",
                     },
                     {
                       step: 2,
-                      title: "Open your website's HTML",
-                      description: "Find the HTML file or template where you want to add the chatbot.",
+                      title: "Abre el HTML de tu sitio",
+                      description: "Encuentra el archivo HTML o plantilla donde quieres agregar el chatbot.",
                     },
                     {
                       step: 3,
-                      title: "Paste before </body>",
-                      description: "Add the script just before the closing body tag.",
+                      title: "Pega antes de </body>",
+                      description: "Agrega el script justo antes de la etiqueta de cierre body.",
                     },
                     {
                       step: 4,
-                      title: "Save and publish",
-                      description: "Save your changes and publish your website.",
+                      title: "Guarda y publica",
+                      description: "Guarda los cambios y publica tu sitio web.",
                     },
                   ].map((item) => (
                     <div key={item.step} className="flex gap-4" data-testid={`guide-step-${item.step}`}>
@@ -188,31 +188,31 @@ export default function EmbedPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Widget Details</CardTitle>
+                <CardTitle>Detalles del Widget</CardTitle>
                 <CardDescription>
-                  Configuration for {selectedBot?.name}
+                  Configuración de {selectedBot?.name}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Status</span>
+                    <span className="text-sm text-muted-foreground">Estado</span>
                     <Badge variant={selectedBot?.isActive ? "default" : "secondary"}>
-                      {selectedBot?.isActive ? "Active" : "Inactive"}
+                      {selectedBot?.isActive ? "Activo" : "Inactivo"}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">AI Model</span>
+                    <span className="text-sm text-muted-foreground">Modelo de IA</span>
                     <span className="text-sm font-medium">{selectedBot?.aiModel}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Position</span>
+                    <span className="text-sm text-muted-foreground">Posición</span>
                     <span className="text-sm font-medium capitalize">
                       {selectedBot?.position?.replace("-", " ")}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Primary Color</span>
+                    <span className="text-sm text-muted-foreground">Color Principal</span>
                     <div className="flex items-center gap-2">
                       <div
                         className="h-4 w-4 rounded-full border"
@@ -230,8 +230,8 @@ export default function EmbedPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <div>
-                  <CardTitle>Live Preview</CardTitle>
-                  <CardDescription>See how your widget looks</CardDescription>
+                  <CardTitle>Vista Previa en Vivo</CardTitle>
+                  <CardDescription>Mira cómo se ve tu widget</CardDescription>
                 </div>
                 <Tabs value={previewDevice} onValueChange={(v) => setPreviewDevice(v as typeof previewDevice)}>
                   <TabsList>

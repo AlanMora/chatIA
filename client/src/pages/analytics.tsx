@@ -22,7 +22,7 @@ export default function Analytics() {
 
   const stats = [
     {
-      title: "Total Conversations",
+      title: "Conversaciones Totales",
       value: "0",
       change: "+0%",
       changeType: "neutral" as const,
@@ -31,7 +31,7 @@ export default function Analytics() {
       bgColor: "bg-blue-500/10",
     },
     {
-      title: "Messages Exchanged",
+      title: "Mensajes Intercambiados",
       value: "0",
       change: "+0%",
       changeType: "neutral" as const,
@@ -40,7 +40,7 @@ export default function Analytics() {
       bgColor: "bg-green-500/10",
     },
     {
-      title: "Avg Response Time",
+      title: "Tiempo de Respuesta",
       value: "1.2s",
       change: "-0.3s",
       changeType: "positive" as const,
@@ -49,9 +49,9 @@ export default function Analytics() {
       bgColor: "bg-orange-500/10",
     },
     {
-      title: "User Satisfaction",
+      title: "Satisfacción",
       value: "N/A",
-      change: "No data",
+      change: "Sin datos",
       changeType: "neutral" as const,
       icon: TrendingUp,
       color: "text-purple-500",
@@ -63,9 +63,9 @@ export default function Analytics() {
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">Analytics</h1>
+          <h1 className="text-3xl font-semibold">Estadísticas</h1>
           <p className="text-muted-foreground">
-            Track your chatbot performance and usage
+            Rastrea el rendimiento y uso de tus chatbots
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -74,10 +74,10 @@ export default function Analytics() {
           ) : (
             <Select value={selectedChatbot} onValueChange={setSelectedChatbot}>
               <SelectTrigger className="w-48" data-testid="select-chatbot">
-                <SelectValue placeholder="All chatbots" />
+                <SelectValue placeholder="Todos los chatbots" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Chatbots</SelectItem>
+                <SelectItem value="all">Todos los Chatbots</SelectItem>
                 {chatbots?.map((chatbot) => (
                   <SelectItem key={chatbot.id} value={chatbot.id.toString()}>
                     {chatbot.name}
@@ -91,10 +91,10 @@ export default function Analytics() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="24h">Last 24 hours</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="24h">Últimas 24 horas</SelectItem>
+              <SelectItem value="7d">Últimos 7 días</SelectItem>
+              <SelectItem value="30d">Últimos 30 días</SelectItem>
+              <SelectItem value="90d">Últimos 90 días</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -122,7 +122,7 @@ export default function Analytics() {
                     : "text-muted-foreground"
                 }`}
               >
-                {stat.change} from last period
+                {stat.change} del período anterior
               </p>
             </CardContent>
           </Card>
@@ -132,18 +132,18 @@ export default function Analytics() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Conversations Over Time</CardTitle>
-            <CardDescription>Number of conversations started each day</CardDescription>
+            <CardTitle>Conversaciones en el Tiempo</CardTitle>
+            <CardDescription>Número de conversaciones iniciadas cada día</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
               <div className="text-center">
                 <BarChart3 className="mx-auto h-10 w-10 text-muted-foreground" />
                 <p className="mt-2 text-sm text-muted-foreground">
-                  No data available yet
+                  Sin datos disponibles aún
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Start conversations to see analytics
+                  Inicia conversaciones para ver las estadísticas
                 </p>
               </div>
             </div>
@@ -152,18 +152,18 @@ export default function Analytics() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Message Distribution</CardTitle>
-            <CardDescription>User vs. bot messages ratio</CardDescription>
+            <CardTitle>Distribución de Mensajes</CardTitle>
+            <CardDescription>Proporción de mensajes de usuario vs bot</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
               <div className="text-center">
                 <MessageSquare className="mx-auto h-10 w-10 text-muted-foreground" />
                 <p className="mt-2 text-sm text-muted-foreground">
-                  No messages yet
+                  Sin mensajes aún
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Chat data will appear here
+                  Los datos del chat aparecerán aquí
                 </p>
               </div>
             </div>
@@ -173,18 +173,18 @@ export default function Analytics() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Conversations</CardTitle>
-          <CardDescription>Latest interactions with your chatbots</CardDescription>
+          <CardTitle>Conversaciones Recientes</CardTitle>
+          <CardDescription>Últimas interacciones con tus chatbots</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex h-48 items-center justify-center rounded-lg border border-dashed">
             <div className="text-center">
               <Users className="mx-auto h-10 w-10 text-muted-foreground" />
               <p className="mt-2 text-sm text-muted-foreground">
-                No conversations yet
+                Sin conversaciones aún
               </p>
               <p className="text-xs text-muted-foreground">
-                Embed your chatbot on a website to start collecting data
+                Inserta tu chatbot en un sitio web para comenzar a recopilar datos
               </p>
             </div>
           </div>
