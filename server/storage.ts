@@ -1,4 +1,6 @@
-import { randomUUID } from "crypto";
+import { eq, desc } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import type {
   User,
   InsertUser,
@@ -11,204 +13,139 @@ import type {
   WidgetMessage,
   InsertWidgetMessage,
 } from "@shared/schema";
+import {
+  users,
+  chatbots,
+  knowledgeBaseItems,
+  widgetConversations,
+  widgetMessages,
+} from "@shared/schema";
 
 export interface IStorage {
-  // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
 
-  // Chatbots
   getChatbot(id: number): Promise<Chatbot | undefined>;
   getAllChatbots(): Promise<Chatbot[]>;
   createChatbot(chatbot: InsertChatbot): Promise<Chatbot>;
   updateChatbot(id: number, chatbot: Partial<InsertChatbot>): Promise<Chatbot | undefined>;
   deleteChatbot(id: number): Promise<void>;
 
-  // Knowledge Base
   getKnowledgeBaseItem(id: number): Promise<KnowledgeBaseItem | undefined>;
   getKnowledgeBaseItemsByChatbot(chatbotId: number): Promise<KnowledgeBaseItem[]>;
   createKnowledgeBaseItem(item: InsertKnowledgeBaseItem): Promise<KnowledgeBaseItem>;
   deleteKnowledgeBaseItem(id: number): Promise<void>;
 
-  // Widget Conversations
   getWidgetConversation(id: number): Promise<WidgetConversation | undefined>;
   getWidgetConversationBySession(chatbotId: number, sessionId: string): Promise<WidgetConversation | undefined>;
   createWidgetConversation(conversation: InsertWidgetConversation): Promise<WidgetConversation>;
 
-  // Widget Messages
   getWidgetMessagesByConversation(conversationId: number): Promise<WidgetMessage[]>;
   createWidgetMessage(message: InsertWidgetMessage): Promise<WidgetMessage>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User> = new Map();
-  private chatbots: Map<number, Chatbot> = new Map();
-  private knowledgeBaseItems: Map<number, KnowledgeBaseItem> = new Map();
-  private widgetConversations: Map<number, WidgetConversation> = new Map();
-  private widgetMessages: Map<number, WidgetMessage> = new Map();
-  
-  private nextChatbotId = 1;
-  private nextKBItemId = 1;
-  private nextConversationId = 1;
-  private nextMessageId = 1;
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-  // Users
+const db = drizzle(pool);
+
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const result = await db.select().from(users).where(eq(users.username, username));
+    return result[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const result = await db.insert(users).values(insertUser).returning();
+    return result[0];
   }
 
-  // Chatbots
   async getChatbot(id: number): Promise<Chatbot | undefined> {
-    return this.chatbots.get(id);
+    const result = await db.select().from(chatbots).where(eq(chatbots.id, id));
+    return result[0];
   }
 
   async getAllChatbots(): Promise<Chatbot[]> {
-    return Array.from(this.chatbots.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    return db.select().from(chatbots).orderBy(desc(chatbots.createdAt));
   }
 
   async createChatbot(chatbot: InsertChatbot): Promise<Chatbot> {
-    const id = this.nextChatbotId++;
-    const newChatbot: Chatbot = {
-      id,
-      name: chatbot.name,
-      description: chatbot.description ?? null,
-      systemPrompt: chatbot.systemPrompt ?? "You are a helpful assistant.",
-      aiModel: chatbot.aiModel ?? "gpt-5",
-      aiProvider: chatbot.aiProvider ?? "openai",
-      primaryColor: chatbot.primaryColor ?? "#3B82F6",
-      textColor: chatbot.textColor ?? "#FFFFFF",
-      position: chatbot.position ?? "bottom-right",
-      welcomeMessage: chatbot.welcomeMessage ?? "Hello! How can I help you today?",
-      temperature: chatbot.temperature ?? "0.7",
-      maxTokens: chatbot.maxTokens ?? 1024,
-      isActive: chatbot.isActive ?? true,
-      createdAt: new Date(),
-    };
-    this.chatbots.set(id, newChatbot);
-    return newChatbot;
+    const result = await db.insert(chatbots).values(chatbot).returning();
+    return result[0];
   }
 
   async updateChatbot(id: number, updates: Partial<InsertChatbot>): Promise<Chatbot | undefined> {
-    const chatbot = this.chatbots.get(id);
-    if (!chatbot) return undefined;
-    
-    const updated: Chatbot = {
-      ...chatbot,
-      ...updates,
-    };
-    this.chatbots.set(id, updated);
-    return updated;
+    const result = await db
+      .update(chatbots)
+      .set(updates)
+      .where(eq(chatbots.id, id))
+      .returning();
+    return result[0];
   }
 
   async deleteChatbot(id: number): Promise<void> {
-    this.chatbots.delete(id);
-    // Also delete related knowledge base items
-    for (const [itemId, item] of this.knowledgeBaseItems) {
-      if (item.chatbotId === id) {
-        this.knowledgeBaseItems.delete(itemId);
-      }
-    }
-    // Delete related conversations and messages
-    for (const [convId, conv] of this.widgetConversations) {
-      if (conv.chatbotId === id) {
-        this.widgetConversations.delete(convId);
-        for (const [msgId, msg] of this.widgetMessages) {
-          if (msg.conversationId === convId) {
-            this.widgetMessages.delete(msgId);
-          }
-        }
-      }
-    }
+    await db.delete(chatbots).where(eq(chatbots.id, id));
   }
 
-  // Knowledge Base
   async getKnowledgeBaseItem(id: number): Promise<KnowledgeBaseItem | undefined> {
-    return this.knowledgeBaseItems.get(id);
+    const result = await db.select().from(knowledgeBaseItems).where(eq(knowledgeBaseItems.id, id));
+    return result[0];
   }
 
   async getKnowledgeBaseItemsByChatbot(chatbotId: number): Promise<KnowledgeBaseItem[]> {
-    return Array.from(this.knowledgeBaseItems.values())
-      .filter((item) => item.chatbotId === chatbotId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return db
+      .select()
+      .from(knowledgeBaseItems)
+      .where(eq(knowledgeBaseItems.chatbotId, chatbotId))
+      .orderBy(desc(knowledgeBaseItems.createdAt));
   }
 
   async createKnowledgeBaseItem(item: InsertKnowledgeBaseItem): Promise<KnowledgeBaseItem> {
-    const id = this.nextKBItemId++;
-    const newItem: KnowledgeBaseItem = {
-      id,
-      chatbotId: item.chatbotId ?? null,
-      title: item.title,
-      content: item.content,
-      sourceType: item.sourceType ?? "text",
-      sourceUrl: item.sourceUrl ?? null,
-      createdAt: new Date(),
-    };
-    this.knowledgeBaseItems.set(id, newItem);
-    return newItem;
+    const result = await db.insert(knowledgeBaseItems).values(item).returning();
+    return result[0];
   }
 
   async deleteKnowledgeBaseItem(id: number): Promise<void> {
-    this.knowledgeBaseItems.delete(id);
+    await db.delete(knowledgeBaseItems).where(eq(knowledgeBaseItems.id, id));
   }
 
-  // Widget Conversations
   async getWidgetConversation(id: number): Promise<WidgetConversation | undefined> {
-    return this.widgetConversations.get(id);
+    const result = await db.select().from(widgetConversations).where(eq(widgetConversations.id, id));
+    return result[0];
   }
 
   async getWidgetConversationBySession(chatbotId: number, sessionId: string): Promise<WidgetConversation | undefined> {
-    return Array.from(this.widgetConversations.values()).find(
-      (conv) => conv.chatbotId === chatbotId && conv.sessionId === sessionId
-    );
+    const result = await db
+      .select()
+      .from(widgetConversations)
+      .where(eq(widgetConversations.chatbotId, chatbotId));
+    return result.find((conv) => conv.sessionId === sessionId);
   }
 
   async createWidgetConversation(conversation: InsertWidgetConversation): Promise<WidgetConversation> {
-    const id = this.nextConversationId++;
-    const newConversation: WidgetConversation = {
-      id,
-      chatbotId: conversation.chatbotId ?? null,
-      sessionId: conversation.sessionId,
-      createdAt: new Date(),
-    };
-    this.widgetConversations.set(id, newConversation);
-    return newConversation;
+    const result = await db.insert(widgetConversations).values(conversation).returning();
+    return result[0];
   }
 
-  // Widget Messages
   async getWidgetMessagesByConversation(conversationId: number): Promise<WidgetMessage[]> {
-    return Array.from(this.widgetMessages.values())
-      .filter((msg) => msg.conversationId === conversationId)
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return db
+      .select()
+      .from(widgetMessages)
+      .where(eq(widgetMessages.conversationId, conversationId))
+      .orderBy(widgetMessages.createdAt);
   }
 
   async createWidgetMessage(message: InsertWidgetMessage): Promise<WidgetMessage> {
-    const id = this.nextMessageId++;
-    const newMessage: WidgetMessage = {
-      id,
-      conversationId: message.conversationId ?? null,
-      role: message.role,
-      content: message.content,
-      createdAt: new Date(),
-    };
-    this.widgetMessages.set(id, newMessage);
-    return newMessage;
+    const result = await db.insert(widgetMessages).values(message).returning();
+    return result[0];
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
