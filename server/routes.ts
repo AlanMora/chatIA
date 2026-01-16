@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertChatbotSchema, insertKnowledgeBaseItemSchema } from "@shared/schema";
 import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import multer from "multer";
 import mammoth from "mammoth";
 import * as cheerio from "cheerio";
@@ -28,6 +29,14 @@ const upload = multer({
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
+
+const gemini = new GoogleGenAI({
+  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+  httpOptions: {
+    apiVersion: "",
+    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
+  },
 });
 
 export async function registerRoutes(
@@ -348,38 +357,67 @@ export async function registerRoutes(
         ? `\n\nKnowledge Base Context:\n${knowledgeItems.map(i => `${i.title}: ${i.content}`).join("\n\n")}`
         : "";
 
-      // Build chat messages
-      const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        {
-          role: "system",
-          content: (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext,
-        },
-        ...messages.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-      ];
-
       // Set up SSE
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      // Stream response
-      const stream = await openai.chat.completions.create({
-        model: chatbot.aiModel || "gpt-5",
-        messages: chatMessages,
-        stream: true,
-        max_completion_tokens: chatbot.maxTokens || 1024,
-      });
-
       let fullResponse = "";
+      const aiProvider = chatbot.aiProvider || "openai";
+      const aiModel = chatbot.aiModel || "gpt-5";
 
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          fullResponse += content;
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      if (aiProvider === "gemini") {
+        // Build Gemini messages
+        const systemPrompt = (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext;
+        const geminiMessages = messages.map((m) => ({
+          role: m.role === "user" ? "user" : "model" as const,
+          parts: [{ text: m.content }],
+        }));
+
+        // Stream response from Gemini
+        const stream = await gemini.models.generateContentStream({
+          model: aiModel,
+          contents: geminiMessages,
+          systemInstruction: systemPrompt,
+          config: {
+            maxOutputTokens: chatbot.maxTokens || 1024,
+          },
+        });
+
+        for await (const chunk of stream) {
+          const content = chunk.text || "";
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        }
+      } else {
+        // Build OpenAI messages
+        const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+          {
+            role: "system",
+            content: (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext,
+          },
+          ...messages.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+        ];
+
+        // Stream response from OpenAI
+        const stream = await openai.chat.completions.create({
+          model: aiModel,
+          messages: chatMessages,
+          stream: true,
+          max_completion_tokens: chatbot.maxTokens || 1024,
+        });
+
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || "";
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
         }
       }
 

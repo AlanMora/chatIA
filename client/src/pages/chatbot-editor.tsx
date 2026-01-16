@@ -55,6 +55,10 @@ const AI_MODELS = [
   { value: "gpt-5.1", label: "GPT-5.1", provider: "openai" },
   { value: "gpt-4o", label: "GPT-4o", provider: "openai" },
   { value: "gpt-4o-mini", label: "GPT-4o Mini (Rápido)", provider: "openai" },
+  { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (Último)", provider: "gemini" },
+  { value: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "gemini" },
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "gemini" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Rápido)", provider: "gemini" },
 ];
 
 const POSITIONS = [
@@ -323,14 +327,30 @@ export default function ChatbotEditor() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Modelo de IA</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select 
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                const selectedModel = AI_MODELS.find(m => m.value === value);
+                                if (selectedModel) {
+                                  form.setValue("aiProvider", selectedModel.provider);
+                                }
+                              }} 
+                              value={field.value}
+                            >
                               <FormControl>
                                 <SelectTrigger data-testid="select-model">
                                   <SelectValue placeholder="Selecciona un modelo" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {AI_MODELS.map((model) => (
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">OpenAI</div>
+                                {AI_MODELS.filter(m => m.provider === "openai").map((model) => (
+                                  <SelectItem key={model.value} value={model.value}>
+                                    {model.label}
+                                  </SelectItem>
+                                ))}
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Google Gemini</div>
+                                {AI_MODELS.filter(m => m.provider === "gemini").map((model) => (
                                   <SelectItem key={model.value} value={model.value}>
                                     {model.label}
                                   </SelectItem>
