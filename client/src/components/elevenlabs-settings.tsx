@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Volume2, RefreshCw, CheckCircle2, AlertCircle, Upload } from "lucide-react";
+import { Loader2, Volume2, RefreshCw, CheckCircle2, AlertCircle, Upload, File, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 
@@ -28,11 +28,19 @@ interface ElevenLabsSettingsProps {
   chatbotId: number;
 }
 
+interface ElevenLabsKBDoc {
+  id: string;
+  name: string;
+  type?: string;
+}
+
 export function ElevenLabsSettings({ chatbotId }: ElevenLabsSettingsProps) {
   const { toast } = useToast();
   const [selectedVoice, setSelectedVoice] = useState<string>("");
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: config, isLoading: configLoading, isError: configError } = useQuery<{ agentId: string; enabled: boolean }>({
     queryKey: ["/api/elevenlabs/config"],
@@ -58,6 +66,12 @@ export function ElevenLabsSettings({ chatbotId }: ElevenLabsSettingsProps) {
   const { data: knowledgeBase } = useQuery({
     queryKey: ["/api/knowledge-base", chatbotId],
     enabled: !!chatbotId,
+  });
+
+  const { data: elevenLabsKB, isLoading: elevenLabsKBLoading } = useQuery<ElevenLabsKBDoc[]>({
+    queryKey: ["/api/elevenlabs/knowledge-base"],
+    enabled: isEnabled,
+    retry: false,
   });
 
   useEffect(() => {
@@ -115,6 +129,7 @@ export function ElevenLabsSettings({ chatbotId }: ElevenLabsSettingsProps) {
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/elevenlabs/knowledge-base"] });
       toast({
         title: "Base de conocimiento sincronizada",
         description: "El contenido ha sido enviado a ElevenLabs exitosamente.",
@@ -124,6 +139,64 @@ export function ElevenLabsSettings({ chatbotId }: ElevenLabsSettingsProps) {
       toast({
         title: "Error de sincronización",
         description: error instanceof Error ? error.message : "No se pudo sincronizar la base de conocimiento.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const uploadFileMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const response = await fetch("/api/elevenlabs/knowledge-base/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Error al subir archivo");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/elevenlabs/knowledge-base"] });
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      toast({
+        title: "Documento subido",
+        description: `"${data.filename}" ha sido agregado al agente de ElevenLabs.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error al subir",
+        description: error instanceof Error ? error.message : "No se pudo subir el documento.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async (docId: string) => {
+      const response = await fetch(`/api/elevenlabs/knowledge-base/${docId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Error al eliminar documento");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/elevenlabs/knowledge-base"] });
+      toast({
+        title: "Documento eliminado",
+        description: "El documento ha sido eliminado del agente de ElevenLabs.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el documento.",
         variant: "destructive",
       });
     },
@@ -330,6 +403,112 @@ export function ElevenLabsSettings({ chatbotId }: ElevenLabsSettingsProps) {
           <p className="text-xs text-muted-foreground">
             Al sincronizar, todo el contenido de la base de conocimiento se enviará a ElevenLabs para que el agente de voz pueda responder preguntas basándose en esta información.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Documentos en ElevenLabs
+          </CardTitle>
+          <CardDescription>
+            Sube documentos directamente al agente de ElevenLabs para que pueda responder preguntas basándose en ellos
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Subir nuevo documento</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.txt"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              className="hidden"
+              data-testid="input-elevenlabs-file"
+            />
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+            >
+              {selectedFile ? (
+                <div className="flex flex-col items-center gap-2">
+                  <File className="h-8 w-8 text-primary" />
+                  <p className="font-medium">{selectedFile.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {(selectedFile.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <p className="font-medium">Haz clic para seleccionar</p>
+                  <p className="text-sm text-muted-foreground">
+                    PDF, DOC, DOCX o TXT (máx 10MB)
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Button
+            onClick={() => selectedFile && uploadFileMutation.mutate(selectedFile)}
+            disabled={!selectedFile || uploadFileMutation.isPending}
+            className="w-full"
+            data-testid="button-upload-elevenlabs"
+          >
+            {uploadFileMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Subiendo...
+              </>
+            ) : (
+              <>
+                <Upload className="mr-2 h-4 w-4" />
+                Subir a ElevenLabs
+              </>
+            )}
+          </Button>
+
+          {elevenLabsKBLoading ? (
+            <div className="flex items-center gap-2 justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm text-muted-foreground">Cargando documentos...</span>
+            </div>
+          ) : elevenLabsKB && elevenLabsKB.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Documentos actuales ({elevenLabsKB.length})</p>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {elevenLabsKB.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="text-sm truncate">{doc.name}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteDocMutation.mutate(doc.id)}
+                      disabled={deleteDocMutation.isPending}
+                      title="Eliminar documento"
+                      data-testid={`button-delete-doc-${doc.id}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground">
+                No hay documentos subidos al agente de ElevenLabs
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

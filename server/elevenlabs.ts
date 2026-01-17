@@ -1,6 +1,34 @@
 import type { Express } from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1";
+
+const uploadDir = path.join(process.cwd(), "uploads", "elevenlabs");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const elevenLabsUpload = multer({
+  storage: multer.diskStorage({
+    destination: uploadDir,
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, `elevenlabs-${uniqueSuffix}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [".pdf", ".doc", ".docx", ".txt"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Tipo de archivo no permitido. Usa PDF, DOC, DOCX o TXT."));
+    }
+  },
+});
 
 interface ElevenLabsVoice {
   voice_id: string;
@@ -40,6 +68,12 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
       res.status(503).json({ error: "ElevenLabs not configured" });
     });
     app.post("/api/elevenlabs/knowledge-base/sync", (req, res) => {
+      res.status(503).json({ error: "ElevenLabs not configured" });
+    });
+    app.post("/api/elevenlabs/knowledge-base/upload", (req, res) => {
+      res.status(503).json({ error: "ElevenLabs not configured" });
+    });
+    app.delete("/api/elevenlabs/knowledge-base/:docId", (req, res) => {
       res.status(503).json({ error: "ElevenLabs not configured" });
     });
     return;
@@ -241,6 +275,109 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error("Error syncing knowledge base:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/elevenlabs/knowledge-base/upload", elevenLabsUpload.single("file"), async (req, res) => {
+    let filePath: string | null = null;
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No se proporcionó ningún archivo" });
+      }
+
+      filePath = req.file.path;
+      const originalName = req.file.originalname;
+      const ext = path.extname(originalName).toLowerCase();
+
+      let content = "";
+      
+      try {
+        if (ext === ".txt") {
+          content = fs.readFileSync(filePath, "utf-8");
+        } else if (ext === ".pdf") {
+          // @ts-ignore - dynamic import
+          const pdfParseModule = await import("pdf-parse");
+          const pdfParse = pdfParseModule.default || pdfParseModule;
+          const dataBuffer = fs.readFileSync(filePath);
+          const pdfData = await pdfParse(dataBuffer);
+          content = pdfData.text;
+        } else if (ext === ".doc" || ext === ".docx") {
+          const mammoth = await import("mammoth");
+          const result = await mammoth.extractRawText({ path: filePath });
+          content = result.value;
+        }
+      } finally {
+        if (filePath && fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          filePath = null;
+        }
+      }
+
+      if (!content.trim()) {
+        return res.status(400).json({ error: "No se pudo extraer contenido del archivo" });
+      }
+
+      const formData = new FormData();
+      const blob = new Blob([content], { type: "text/plain" });
+      formData.append("file", blob, originalName.replace(/\.(pdf|doc|docx)$/i, ".txt"));
+
+      const response = await fetch(
+        `${ELEVENLABS_API_URL}/convai/agents/${agentId}/add-to-knowledge-base`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": apiKey,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("ElevenLabs KB upload error:", error);
+        return res.status(response.status).json({ error: "Error al subir archivo a ElevenLabs" });
+      }
+
+      const data = await response.json();
+      res.json({
+        success: true,
+        filename: originalName,
+        data,
+      });
+    } catch (error) {
+      if (filePath && fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch {}
+      }
+      console.error("Error uploading to ElevenLabs KB:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  });
+
+  app.delete("/api/elevenlabs/knowledge-base/:docId", async (req, res) => {
+    try {
+      const { docId } = req.params;
+
+      const response = await fetch(
+        `${ELEVENLABS_API_URL}/convai/agents/${agentId}/knowledge-base/${docId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "xi-api-key": apiKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("ElevenLabs KB delete error:", error);
+        return res.status(response.status).json({ error: "Error al eliminar documento" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting from ElevenLabs KB:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
     }
   });
 }
