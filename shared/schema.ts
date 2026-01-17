@@ -3,24 +3,13 @@ import { pgTable, text, varchar, serial, integer, timestamp, jsonb, boolean } fr
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+// Auth tables (users and sessions)
+export * from "./models/auth";
 
 // Chatbots table
 export const chatbots = pgTable("chatbots", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
   name: text("name").notNull(),
   description: text("description"),
   systemPrompt: text("system_prompt").default("You are a helpful assistant."),
@@ -45,6 +34,7 @@ export const chatbots = pgTable("chatbots", {
 
 export const insertChatbotSchema = createInsertSchema(chatbots).omit({
   id: true,
+  userId: true,
   createdAt: true,
 });
 

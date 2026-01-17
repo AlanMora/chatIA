@@ -8,6 +8,7 @@ import multer from "multer";
 import mammoth from "mammoth";
 import * as cheerio from "cheerio";
 import { registerElevenLabsRoutes } from "./elevenlabs";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 
 import path from "path";
 import fs from "fs";
@@ -73,15 +74,20 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // ==================== Authentication ====================
+  await setupAuth(app);
+  registerAuthRoutes(app);
+
   // ==================== ElevenLabs Voice AI ====================
   await registerElevenLabsRoutes(app);
 
   // ==================== Chatbots API ====================
   
-  // Get all chatbots
-  app.get("/api/chatbots", async (req, res) => {
+  // Get all chatbots for current user
+  app.get("/api/chatbots", isAuthenticated, async (req: any, res) => {
     try {
-      const chatbots = await storage.getAllChatbots();
+      const userId = req.user?.claims?.sub;
+      const chatbots = await storage.getChatbotsByUser(userId);
       res.json(chatbots);
     } catch (error) {
       console.error("Error fetching chatbots:", error);
@@ -90,12 +96,16 @@ export async function registerRoutes(
   });
 
   // Get single chatbot
-  app.get("/api/chatbots/:id", async (req, res) => {
+  app.get("/api/chatbots/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
       const chatbot = await storage.getChatbot(id);
       if (!chatbot) {
         return res.status(404).json({ error: "Chatbot not found" });
+      }
+      if (chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       res.json(chatbot);
     } catch (error) {
@@ -105,13 +115,14 @@ export async function registerRoutes(
   });
 
   // Create chatbot
-  app.post("/api/chatbots", async (req, res) => {
+  app.post("/api/chatbots", isAuthenticated, async (req: any, res) => {
     try {
       const parsed = insertChatbotSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
-      const chatbot = await storage.createChatbot(parsed.data);
+      const userId = req.user?.claims?.sub;
+      const chatbot = await storage.createChatbot({ ...parsed.data, userId });
       res.status(201).json(chatbot);
     } catch (error) {
       console.error("Error creating chatbot:", error);
@@ -120,13 +131,18 @@ export async function registerRoutes(
   });
 
   // Update chatbot
-  app.patch("/api/chatbots/:id", async (req, res) => {
+  app.patch("/api/chatbots/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
-      const chatbot = await storage.updateChatbot(id, req.body);
-      if (!chatbot) {
+      const userId = req.user?.claims?.sub;
+      const existing = await storage.getChatbot(id);
+      if (!existing) {
         return res.status(404).json({ error: "Chatbot not found" });
       }
+      if (existing.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const chatbot = await storage.updateChatbot(id, req.body);
       res.json(chatbot);
     } catch (error) {
       console.error("Error updating chatbot:", error);
@@ -135,9 +151,17 @@ export async function registerRoutes(
   });
 
   // Delete chatbot
-  app.delete("/api/chatbots/:id", async (req, res) => {
+  app.delete("/api/chatbots/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      const existing = await storage.getChatbot(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Chatbot not found" });
+      }
+      if (existing.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       await storage.deleteChatbot(id);
       res.status(204).send();
     } catch (error) {

@@ -2,8 +2,6 @@ import { eq, desc, sql, and, gte, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import type {
-  User,
-  InsertUser,
   Chatbot,
   InsertChatbot,
   KnowledgeBaseItem,
@@ -14,7 +12,6 @@ import type {
   InsertWidgetMessage,
 } from "@shared/schema";
 import {
-  users,
   chatbots,
   knowledgeBaseItems,
   widgetConversations,
@@ -43,13 +40,10 @@ export interface DailyStats {
 }
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-
   getChatbot(id: number): Promise<Chatbot | undefined>;
   getAllChatbots(): Promise<Chatbot[]>;
-  createChatbot(chatbot: InsertChatbot): Promise<Chatbot>;
+  getChatbotsByUser(userId: string): Promise<Chatbot[]>;
+  createChatbot(chatbot: InsertChatbot & { userId: string }): Promise<Chatbot>;
   updateChatbot(id: number, chatbot: Partial<InsertChatbot>): Promise<Chatbot | undefined>;
   deleteChatbot(id: number): Promise<void>;
 
@@ -77,21 +71,6 @@ const pool = new pg.Pool({
 const db = drizzle(pool);
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id));
-    return result[0];
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.username, username));
-    return result[0];
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const result = await db.insert(users).values(insertUser).returning();
-    return result[0];
-  }
-
   async getChatbot(id: number): Promise<Chatbot | undefined> {
     const result = await db.select().from(chatbots).where(eq(chatbots.id, id));
     return result[0];
@@ -101,7 +80,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(chatbots).orderBy(desc(chatbots.createdAt));
   }
 
-  async createChatbot(chatbot: InsertChatbot): Promise<Chatbot> {
+  async getChatbotsByUser(userId: string): Promise<Chatbot[]> {
+    return db.select().from(chatbots).where(eq(chatbots.userId, userId)).orderBy(desc(chatbots.createdAt));
+  }
+
+  async createChatbot(chatbot: InsertChatbot & { userId: string }): Promise<Chatbot> {
     const result = await db.insert(chatbots).values(chatbot).returning();
     return result[0];
   }
