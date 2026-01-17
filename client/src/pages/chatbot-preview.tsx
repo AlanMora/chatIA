@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, User, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VoiceChat } from "@/components/voice-chat";
 
 interface Message {
   id: string;
@@ -275,6 +276,16 @@ export default function ChatbotPreview() {
                 disabled={isLoadingChat}
                 className="flex-1"
                 data-testid="input-preview-message"
+              />
+              <VoiceChat
+                primaryColor={chatbot.primaryColor || "#3B82F6"}
+                textColor={chatbot.textColor || "#FFFFFF"}
+                onTranscript={(role, text) => {
+                  setMessages((prev) => [
+                    ...prev,
+                    { id: Date.now().toString(), role, content: text },
+                  ]);
+                }}
               />
               <Button
                 type="submit"

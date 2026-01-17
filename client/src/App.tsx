@@ -22,6 +22,7 @@ import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import ChatbotPreview from "@/pages/chatbot-preview";
 import Landing from "@/pages/landing";
+import ElevenLabsPage from "@/pages/elevenlabs";
 
 function Router() {
   return (
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/embed" component={EmbedPage} />
       <Route path="/analytics" component={Analytics} />
+      <Route path="/elevenlabs" component={ElevenLabsPage} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

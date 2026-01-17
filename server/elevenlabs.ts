@@ -1,7 +1,8 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { isAuthenticated } from "./replit_integrations/auth/index";
 
 const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1";
 
@@ -104,7 +105,7 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
     }
   });
 
-  app.get("/api/elevenlabs/voices", async (req, res) => {
+  app.get("/api/elevenlabs/voices", isAuthenticated, async (req: any, res) => {
     try {
       const response = await fetch(`${ELEVENLABS_API_URL}/voices`, {
         headers: {
@@ -133,7 +134,7 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
     }
   });
 
-  app.get("/api/elevenlabs/agent", async (req, res) => {
+  app.get("/api/elevenlabs/agent", isAuthenticated, async (req: any, res) => {
     try {
       const response = await fetch(`${ELEVENLABS_API_URL}/convai/agents/${agentId}`, {
         headers: {
@@ -161,7 +162,7 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
     }
   });
 
-  app.patch("/api/elevenlabs/agent", async (req, res) => {
+  app.patch("/api/elevenlabs/agent", isAuthenticated, async (req: any, res) => {
     try {
       const { voiceId, firstMessage, systemPrompt } = req.body;
 
@@ -215,7 +216,7 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
     }
   });
 
-  app.get("/api/elevenlabs/knowledge-base", async (req, res) => {
+  app.get("/api/elevenlabs/knowledge-base", isAuthenticated, async (req: any, res) => {
     try {
       const response = await fetch(`${ELEVENLABS_API_URL}/convai/agents/${agentId}`, {
         headers: {
@@ -238,7 +239,7 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
     }
   });
 
-  app.post("/api/elevenlabs/knowledge-base/sync", async (req, res) => {
+  app.post("/api/elevenlabs/knowledge-base/sync", isAuthenticated, async (req: any, res) => {
     try {
       const { content, filename } = req.body;
 
@@ -278,7 +279,7 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
     }
   });
 
-  app.post("/api/elevenlabs/knowledge-base/upload", elevenLabsUpload.single("file"), async (req, res) => {
+  app.post("/api/elevenlabs/knowledge-base/upload", isAuthenticated, elevenLabsUpload.single("file"), async (req: any, res) => {
     let filePath: string | null = null;
     
     try {
@@ -354,7 +355,7 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
     }
   });
 
-  app.delete("/api/elevenlabs/knowledge-base/:docId", async (req, res) => {
+  app.delete("/api/elevenlabs/knowledge-base/:docId", isAuthenticated, async (req: any, res) => {
     try {
       const { docId } = req.params;
 

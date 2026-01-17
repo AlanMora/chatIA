@@ -99,6 +99,14 @@ To embed a chatbot on an external website:
 - **Protected API routes**: All chatbot/analytics/knowledge-base routes require authentication
 - **Analytics scoping**: Analytics endpoints filter by user's chatbots (getAnalyticsStatsByIds, getDailyStatsByIds, getRecentConversationsByIds)
 - **Ownership verification**: All chatbot operations verify userId before proceeding
+- **ElevenLabs protection**: All admin endpoints for voice configuration require authentication
+
+## ElevenLabs Voice Integration
+- **Admin page** (/elevenlabs): Configure voice, upload documents, sync KB
+- **Voice in chat preview**: VoiceChat component integrated in chatbot preview
+- **Voice in widget**: WebSocket-based voice support in embeddable widget
+- **Endpoints**: /api/elevenlabs/voices, /api/elevenlabs/agent, /api/elevenlabs/knowledge-base
+- **Secrets**: ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID
 
 ## Known Limitations
 - Analytics don't track response times or satisfaction ratings yet

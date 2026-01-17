@@ -7,6 +7,7 @@ import {
   BarChart3,
   Settings,
   MessageSquare,
+  Mic,
 } from "lucide-react";
 import {
   Sidebar,
@@ -46,6 +47,11 @@ const menuItems = [
     title: "Estadísticas",
     url: "/analytics",
     icon: BarChart3,
+  },
+  {
+    title: "Voz IA",
+    url: "/elevenlabs",
+    icon: Mic,
   },
 ];
 
