@@ -216,6 +216,75 @@
       width: 18px;
       height: 18px;
     }
+    .chatbot-widget-voice {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .chatbot-widget-voice:hover {
+      transform: scale(1.05);
+    }
+    .chatbot-widget-voice:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .chatbot-widget-voice svg {
+      width: 18px;
+      height: 18px;
+    }
+    .chatbot-widget-voice.active {
+      background: #22c55e;
+      border-color: #22c55e;
+      color: white;
+      animation: pulse 1.5s infinite;
+    }
+    .chatbot-widget-voice-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 12px;
+      background: rgba(34, 197, 94, 0.1);
+      color: #22c55e;
+    }
+    .chatbot-widget-voice-status .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse 1s infinite;
+    }
+    .chatbot-widget-voice-end {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: #ef4444;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .chatbot-widget-voice-end:hover {
+      background: #dc2626;
+    }
+    .chatbot-widget-voice-end svg {
+      width: 18px;
+      height: 18px;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
     @media (max-width: 480px) {
       .chatbot-widget-container {
         width: 100%;
@@ -233,11 +302,18 @@
   const iconBot = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>';
   const iconUser = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
   const iconSend = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>';
+  const iconMic = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
+  const iconMicOff = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
+  const iconPhoneOff = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="22" x2="2" y1="2" y2="22"/></svg>';
   
   let config = null;
+  let voiceConfig = null;
   let messages = [];
   let isOpen = false;
   let isLoading = false;
+  let isVoiceActive = false;
+  let isVoiceConnecting = false;
+  let conversation = null;
   let sessionId = localStorage.getItem('chatbot-session-' + chatbotId) || generateId();
   localStorage.setItem('chatbot-session-' + chatbotId, sessionId);
   
@@ -255,6 +331,16 @@
       if (config.welcomeMessage) {
         messages.push({ role: 'assistant', content: config.welcomeMessage });
       }
+      
+      try {
+        const voiceResponse = await fetch(baseUrl + '/api/elevenlabs/config');
+        if (voiceResponse.ok) {
+          voiceConfig = await voiceResponse.json();
+        }
+      } catch (e) {
+        console.log('Voice features not available');
+      }
+      
       render();
     } catch (error) {
       console.error('ChatBot Widget: Failed to load config', error);
@@ -325,6 +411,23 @@
         </div>
         <div class="chatbot-widget-input-area">
           <input type="text" class="chatbot-widget-input" id="chatbot-input" placeholder="Type a message..." ${isLoading ? 'disabled' : ''}>
+          ${voiceConfig && voiceConfig.enabled ? (
+            isVoiceActive ? `
+              <div class="chatbot-widget-voice-status">
+                <span class="dot"></span>
+                Escuchando...
+              </div>
+              <button class="chatbot-widget-voice-end" id="chatbot-voice-end" title="Terminar llamada">
+                ${iconPhoneOff}
+              </button>
+            ` : `
+              <button class="chatbot-widget-voice ${isVoiceConnecting ? 'connecting' : ''}" id="chatbot-voice" 
+                style="border-color: ${config.primaryColor || '#3B82F6'}; color: ${config.primaryColor || '#3B82F6'};"
+                title="Iniciar conversación por voz" ${isVoiceConnecting ? 'disabled' : ''}>
+                ${iconMic}
+              </button>
+            `
+          ) : ''}
           <button class="chatbot-widget-send" id="chatbot-send" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};" ${isLoading ? 'disabled' : ''}>
             ${iconSend}
           </button>
@@ -356,8 +459,91 @@
       if (e.key === 'Enter') handleSend();
     };
     
+    const voiceBtn = document.getElementById('chatbot-voice');
+    if (voiceBtn) {
+      voiceBtn.onclick = startVoiceConversation;
+    }
+    
+    const voiceEndBtn = document.getElementById('chatbot-voice-end');
+    if (voiceEndBtn) {
+      voiceEndBtn.onclick = endVoiceConversation;
+    }
+    
     const messagesContainer = document.getElementById('chatbot-messages');
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+  
+  async function startVoiceConversation() {
+    if (!voiceConfig || !voiceConfig.agentId || isVoiceConnecting) return;
+    
+    try {
+      isVoiceConnecting = true;
+      render();
+      
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      const signedUrlResponse = await fetch(baseUrl + '/api/elevenlabs/signed-url');
+      if (!signedUrlResponse.ok) {
+        throw new Error('No se pudo obtener conexión de voz');
+      }
+      const data = await signedUrlResponse.json();
+      
+      if (!data.signed_url) {
+        throw new Error('URL de voz no disponible');
+      }
+      
+      conversation = new WebSocket(data.signed_url);
+      
+      conversation.onopen = function() {
+        isVoiceConnecting = false;
+        isVoiceActive = true;
+        render();
+      };
+      
+      conversation.onclose = function() {
+        isVoiceActive = false;
+        isVoiceConnecting = false;
+        conversation = null;
+        render();
+      };
+      
+      conversation.onmessage = function(event) {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'agent_response' && msg.agent_response_event?.agent_response) {
+            messages.push({ role: 'assistant', content: msg.agent_response_event.agent_response });
+            render();
+          } else if (msg.type === 'user_transcript' && msg.user_transcription_event?.user_transcript) {
+            messages.push({ role: 'user', content: msg.user_transcription_event.user_transcript });
+            render();
+          }
+        } catch (e) {}
+      };
+      
+      conversation.onerror = function(err) {
+        console.error('Voice error:', err);
+        isVoiceActive = false;
+        isVoiceConnecting = false;
+        conversation = null;
+        render();
+      };
+      
+    } catch (error) {
+      console.error('Failed to start voice:', error);
+      alert('Error al iniciar voz: ' + error.message);
+      isVoiceConnecting = false;
+      isVoiceActive = false;
+      render();
+    }
+  }
+  
+  async function endVoiceConversation() {
+    if (conversation) {
+      conversation.close();
+      conversation = null;
+    }
+    isVoiceActive = false;
+    render();
   }
   
   function escapeHtml(text) {
