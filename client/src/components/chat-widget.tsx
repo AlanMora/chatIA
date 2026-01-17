@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, X, Send, Bot, User, Loader2 } from "lucide-react";
 import type { Chatbot } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { VoiceChat } from "./voice-chat";
 
 interface Message {
   id: string;
@@ -313,6 +314,22 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
             className="flex-1"
             data-testid="input-chat-message"
           />
+          {!isPreview && (
+            <VoiceChat
+              primaryColor={chatbot.primaryColor}
+              textColor={chatbot.textColor}
+              onTranscript={(role, text) => {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: Date.now().toString(),
+                    role,
+                    content: text,
+                  },
+                ]);
+              }}
+            />
+          )}
           <Button
             type="submit"
             size="icon"

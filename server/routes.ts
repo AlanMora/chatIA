@@ -7,6 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import multer from "multer";
 import mammoth from "mammoth";
 import * as cheerio from "cheerio";
+import { registerElevenLabsRoutes } from "./elevenlabs";
 
 import path from "path";
 import fs from "fs";
@@ -72,6 +73,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // ==================== ElevenLabs Voice AI ====================
+  await registerElevenLabsRoutes(app);
+
   // ==================== Chatbots API ====================
   
   // Get all chatbots

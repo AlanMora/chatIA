@@ -27,11 +27,12 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Save, Eye, Upload, X, ImageIcon } from "lucide-react";
+import { ArrowLeft, Save, Eye, Upload, X, ImageIcon, Mic } from "lucide-react";
 import { Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ChatWidget } from "@/components/chat-widget";
+import { ElevenLabsSettings } from "@/components/elevenlabs-settings";
 import type { Chatbot } from "@shared/schema";
 
 const chatbotFormSchema = z.object({
@@ -313,6 +314,10 @@ export default function ChatbotEditor() {
                   <TabsTrigger value="basic" className="flex-1" data-testid="tab-basic">Básico</TabsTrigger>
                   <TabsTrigger value="ai" className="flex-1" data-testid="tab-ai">Configuración IA</TabsTrigger>
                   <TabsTrigger value="appearance" className="flex-1" data-testid="tab-appearance">Apariencia</TabsTrigger>
+                  <TabsTrigger value="voice" className="flex-1" data-testid="tab-voice">
+                    <Mic className="mr-1 h-3 w-3" />
+                    Voz
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="basic" className="mt-4 space-y-4">
@@ -753,6 +758,20 @@ export default function ChatbotEditor() {
                       </div>
                     </CardContent>
                   </Card>
+                </TabsContent>
+
+                <TabsContent value="voice" className="mt-4 space-y-4">
+                  {!isNew && chatbotId ? (
+                    <ElevenLabsSettings chatbotId={chatbotId} />
+                  ) : (
+                    <Card>
+                      <CardContent className="py-8 text-center">
+                        <p className="text-muted-foreground">
+                          Guarda el chatbot primero para configurar las opciones de voz
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
                 </TabsContent>
               </Tabs>
             </form>
