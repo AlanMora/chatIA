@@ -314,22 +314,20 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
             className="flex-1"
             data-testid="input-chat-message"
           />
-          {!isPreview && (
-            <VoiceChat
-              primaryColor={chatbot.primaryColor}
-              textColor={chatbot.textColor}
-              onTranscript={(role, text) => {
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: Date.now().toString(),
-                    role,
-                    content: text,
-                  },
-                ]);
-              }}
-            />
-          )}
+          <VoiceChat
+            primaryColor={chatbot.primaryColor || undefined}
+            textColor={chatbot.textColor || undefined}
+            onTranscript={(role, text) => {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Date.now().toString(),
+                  role,
+                  content: text,
+                },
+              ]);
+            }}
+          />
           <Button
             type="submit"
             size="icon"

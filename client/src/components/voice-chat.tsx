@@ -107,10 +107,6 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className }: 
     setIsMuted(!isMuted);
   }, [conversation, isMuted]);
 
-  if (!agentId) {
-    return null;
-  }
-
   const isConnected = conversation.status === "connected";
   const isSpeaking = conversation.isSpeaking;
 
@@ -126,13 +122,13 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className }: 
           size="icon"
           variant="outline"
           onClick={startConversation}
-          disabled={isConnecting}
+          disabled={isConnecting || !agentId}
           className="relative"
           style={{ 
             borderColor: primaryColor || "#3B82F6",
             color: primaryColor || "#3B82F6"
           }}
-          title="Iniciar conversación por voz"
+          title={agentId ? "Iniciar conversación por voz" : "Voz no configurada"}
           data-testid="button-start-voice"
         >
           {isConnecting ? (
