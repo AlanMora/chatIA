@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import { useConversation } from "@elevenlabs/react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Phone, PhoneOff, Volume2, VolumeX, Loader2 } from "lucide-react";
+import { Mic, MicOff, PhoneOff, Volume2, VolumeX, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface VoiceChatProps {
@@ -13,9 +12,12 @@ interface VoiceChatProps {
 
 export function VoiceChat({ onTranscript, primaryColor, textColor, className }: VoiceChatProps) {
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conversation, setConversation] = useState<any>(null);
 
   useEffect(() => {
     fetch("/api/elevenlabs/config")
@@ -33,26 +35,58 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className }: 
       });
   }, []);
 
-  const conversation = useConversation({
-    onConnect: () => {
-      setIsConnecting(false);
-      setError(null);
-    },
-    onDisconnect: () => {
-      setIsConnecting(false);
-    },
-    onMessage: (message) => {
-      if (onTranscript && message.message) {
-        const role = message.source === "user" ? "user" : "assistant";
-        onTranscript(role, message.message);
+  useEffect(() => {
+    let conversationInstance: any = null;
+
+    async function initConversation() {
+      try {
+        const { Conversation } = await import("@elevenlabs/client");
+        conversationInstance = await Conversation.startSession({
+          agentId: agentId!,
+          connectionType: "websocket",
+          onConnect: () => {
+            setIsConnecting(false);
+            setIsConnected(true);
+            setError(null);
+          },
+          onDisconnect: () => {
+            setIsConnected(false);
+            setIsConnecting(false);
+          },
+          onMessage: (message: any) => {
+            if (onTranscript && message.message) {
+              const role = message.source === "user" ? "user" : "assistant";
+              onTranscript(role, message.message);
+            }
+          },
+          onModeChange: (mode: any) => {
+            setIsSpeaking(mode.mode === "speaking");
+          },
+          onError: (err: any) => {
+            console.error("ElevenLabs error:", err);
+            setError("Error en la conexión de voz");
+            setIsConnecting(false);
+            setIsConnected(false);
+          },
+        });
+        setConversation(conversationInstance);
+      } catch (err) {
+        console.error("Failed to start conversation:", err);
+        setError(err instanceof Error ? err.message : "Error al iniciar la conversación");
+        setIsConnecting(false);
       }
-    },
-    onError: (err) => {
-      console.error("ElevenLabs error:", err);
-      setError("Error en la conexión de voz");
-      setIsConnecting(false);
-    },
-  });
+    }
+
+    if (isConnecting && agentId) {
+      initConversation();
+    }
+
+    return () => {
+      if (conversationInstance) {
+        conversationInstance.endSession();
+      }
+    };
+  }, [isConnecting, agentId, onTranscript]);
 
   const startConversation = useCallback(async () => {
     if (!agentId) {
@@ -61,54 +95,32 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className }: 
     }
 
     try {
-      setIsConnecting(true);
       setError(null);
-
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (micError) {
-        throw new Error("Necesitas permitir acceso al micrófono");
-      }
-
-      const signedUrlResponse = await fetch("/api/elevenlabs/signed-url");
-      if (!signedUrlResponse.ok) {
-        if (signedUrlResponse.status === 503) {
-          throw new Error("Servicio de voz no configurado");
-        }
-        throw new Error("No se pudo obtener la URL de conexión");
-      }
-      const data = await signedUrlResponse.json();
-      const signedUrl = data.signed_url;
-
-      if (!signedUrl) {
-        throw new Error("URL de conexión no válida");
-      }
-
-      await conversation.startSession({
-        signedUrl,
-      });
-    } catch (err) {
-      console.error("Failed to start conversation:", err);
-      setError(err instanceof Error ? err.message : "Error al iniciar la conversación");
-      setIsConnecting(false);
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      setIsConnecting(true);
+    } catch (micError) {
+      setError("Necesitas permitir acceso al micrófono");
     }
-  }, [agentId, conversation]);
+  }, [agentId]);
 
   const endConversation = useCallback(async () => {
-    await conversation.endSession();
+    if (conversation) {
+      await conversation.endSession();
+      setConversation(null);
+    }
+    setIsConnected(false);
   }, [conversation]);
 
   const toggleMute = useCallback(() => {
-    if (isMuted) {
-      conversation.setVolume({ volume: 1 });
-    } else {
-      conversation.setVolume({ volume: 0 });
+    if (conversation) {
+      if (isMuted) {
+        conversation.setVolume({ volume: 1 });
+      } else {
+        conversation.setVolume({ volume: 0 });
+      }
     }
     setIsMuted(!isMuted);
   }, [conversation, isMuted]);
-
-  const isConnected = conversation.status === "connected";
-  const isSpeaking = conversation.isSpeaking;
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
