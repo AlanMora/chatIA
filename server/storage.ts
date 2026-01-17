@@ -60,8 +60,11 @@ export interface IStorage {
   createWidgetMessage(message: InsertWidgetMessage): Promise<WidgetMessage>;
 
   getAnalyticsStats(chatbotId?: number, daysBack?: number): Promise<AnalyticsStats>;
+  getAnalyticsStatsByIds(chatbotIds: number[], daysBack?: number): Promise<AnalyticsStats>;
   getRecentConversations(chatbotId?: number, limit?: number): Promise<ConversationWithMessages[]>;
+  getRecentConversationsByIds(chatbotIds: number[], limit?: number): Promise<ConversationWithMessages[]>;
   getDailyStats(chatbotId?: number, daysBack?: number): Promise<DailyStats[]>;
+  getDailyStatsByIds(chatbotIds: number[], daysBack?: number): Promise<DailyStats[]>;
 }
 
 const pool = new pg.Pool({
@@ -234,6 +237,140 @@ export class DatabaseStorage implements IStorage {
       ? allConversations.filter(c => c.chatbotId === chatbotId)
       : allConversations;
     
+    const filteredConvIds = new Set(filteredConvs.map(c => c.id));
+
+    const allMessages = await db.select().from(widgetMessages)
+      .where(gte(widgetMessages.createdAt, startDate));
+    
+    const filteredMessages = allMessages.filter(m => 
+      m.conversationId && filteredConvIds.has(m.conversationId)
+    );
+    
+    for (let i = daysBack - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+
+      const dayConvs = filteredConvs.filter(c => {
+        const created = new Date(c.createdAt);
+        return created >= date && created < nextDate;
+      });
+
+      const dayMsgs = filteredMessages.filter(m => {
+        const created = new Date(m.createdAt);
+        return created >= date && created < nextDate;
+      });
+
+      stats.push({
+        date: date.toISOString().split('T')[0],
+        conversations: dayConvs.length,
+        messages: dayMsgs.length,
+      });
+    }
+
+    return stats;
+  }
+
+  async getAnalyticsStatsByIds(chatbotIds: number[], daysBack: number = 7): Promise<AnalyticsStats> {
+    if (chatbotIds.length === 0) {
+      return {
+        totalConversations: 0,
+        totalMessages: 0,
+        userMessages: 0,
+        assistantMessages: 0,
+        conversationsToday: 0,
+        messagesToday: 0,
+      };
+    }
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysBack);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const allConversations = await db.select().from(widgetConversations)
+      .where(gte(widgetConversations.createdAt, startDate));
+    
+    const filteredConvs = allConversations.filter(c => c.chatbotId && chatbotIds.includes(c.chatbotId));
+    const todayConvs = filteredConvs.filter(c => c.createdAt >= todayStart);
+    const filteredConvIds = new Set(filteredConvs.map(c => c.id));
+    const todayConvIds = new Set(todayConvs.map(c => c.id));
+
+    const allMessages = await db
+      .select()
+      .from(widgetMessages)
+      .where(gte(widgetMessages.createdAt, startDate));
+
+    const filteredMessages = allMessages.filter(m => 
+      m.conversationId && filteredConvIds.has(m.conversationId)
+    );
+
+    const todayMessages = allMessages.filter(m => 
+      m.conversationId && todayConvIds.has(m.conversationId) && m.createdAt >= todayStart
+    );
+
+    const userMessages = filteredMessages.filter(m => m.role === 'user').length;
+    const assistantMessages = filteredMessages.filter(m => m.role === 'assistant').length;
+
+    return {
+      totalConversations: filteredConvs.length,
+      totalMessages: filteredMessages.length,
+      userMessages,
+      assistantMessages,
+      conversationsToday: todayConvs.length,
+      messagesToday: todayMessages.length,
+    };
+  }
+
+  async getRecentConversationsByIds(chatbotIds: number[], limit: number = 10): Promise<ConversationWithMessages[]> {
+    if (chatbotIds.length === 0) {
+      return [];
+    }
+
+    const conversations = await db.select().from(widgetConversations)
+      .orderBy(desc(widgetConversations.createdAt));
+    
+    const filteredConvs = conversations
+      .filter(c => c.chatbotId && chatbotIds.includes(c.chatbotId))
+      .slice(0, limit);
+
+    const results: ConversationWithMessages[] = [];
+    for (const conv of filteredConvs) {
+      const messages = await this.getWidgetMessagesByConversation(conv.id);
+      const chatbot = conv.chatbotId ? await this.getChatbot(conv.chatbotId) : null;
+      results.push({
+        conversation: conv,
+        messages,
+        chatbotName: chatbot?.name || 'Desconocido',
+      });
+    }
+
+    return results;
+  }
+
+  async getDailyStatsByIds(chatbotIds: number[], daysBack: number = 7): Promise<DailyStats[]> {
+    if (chatbotIds.length === 0) {
+      const stats: DailyStats[] = [];
+      for (let i = daysBack - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        stats.push({ date: date.toISOString().split('T')[0], conversations: 0, messages: 0 });
+      }
+      return stats;
+    }
+
+    const stats: DailyStats[] = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysBack);
+    startDate.setHours(0, 0, 0, 0);
+
+    const allConversations = await db.select().from(widgetConversations)
+      .where(gte(widgetConversations.createdAt, startDate));
+    
+    const filteredConvs = allConversations.filter(c => c.chatbotId && chatbotIds.includes(c.chatbotId));
     const filteredConvIds = new Set(filteredConvs.map(c => c.id));
 
     const allMessages = await db.select().from(widgetMessages)

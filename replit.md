@@ -93,6 +93,12 @@ To embed a chatbot on an external website:
 <script src="https://your-replit-url/widget.js" data-chatbot-id="1"></script>
 ```
 
+## Security Implementation
+- **Multi-tenant isolation**: Each user only sees their own chatbots and analytics
+- **Replit Auth (OIDC)**: Supports Google, GitHub, Apple, and email login
+- **Protected API routes**: All chatbot/analytics/knowledge-base routes require authentication
+- **Analytics scoping**: Analytics endpoints filter by user's chatbots (getAnalyticsStatsByIds, getDailyStatsByIds, getRecentConversationsByIds)
+- **Ownership verification**: All chatbot operations verify userId before proceeding
+
 ## Known Limitations
-- No user authentication yet
 - Analytics don't track response times or satisfaction ratings yet

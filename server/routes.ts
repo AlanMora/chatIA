@@ -173,9 +173,14 @@ export async function registerRoutes(
   // ==================== Knowledge Base API ====================
 
   // Get knowledge base items for a chatbot
-  app.get("/api/knowledge-base/:chatbotId", async (req, res) => {
+  app.get("/api/knowledge-base/:chatbotId", isAuthenticated, async (req: any, res) => {
     try {
       const chatbotId = parseInt(req.params.chatbotId);
+      const userId = req.user?.claims?.sub;
+      const chatbot = await storage.getChatbot(chatbotId);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const items = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
       res.json(items);
     } catch (error) {
@@ -185,11 +190,16 @@ export async function registerRoutes(
   });
 
   // Create knowledge base item
-  app.post("/api/knowledge-base", async (req, res) => {
+  app.post("/api/knowledge-base", isAuthenticated, async (req: any, res) => {
     try {
       const parsed = insertKnowledgeBaseItemSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
+      }
+      const userId = req.user?.claims?.sub;
+      const chatbot = await storage.getChatbot(parsed.data.chatbotId!);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       const item = await storage.createKnowledgeBaseItem(parsed.data);
       res.status(201).json(item);
@@ -200,9 +210,17 @@ export async function registerRoutes(
   });
 
   // Delete knowledge base item
-  app.delete("/api/knowledge-base/:id", async (req, res) => {
+  app.delete("/api/knowledge-base/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      const item = await storage.getKnowledgeBaseItem(id);
+      if (item?.chatbotId) {
+        const chatbot = await storage.getChatbot(item.chatbotId);
+        if (!chatbot || chatbot.userId !== userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
       await storage.deleteKnowledgeBaseItem(id);
       res.status(204).send();
     } catch (error) {
@@ -212,11 +230,12 @@ export async function registerRoutes(
   });
 
   // Upload file and extract content
-  app.post("/api/knowledge-base/upload", uploadDocs.single('file'), async (req, res) => {
+  app.post("/api/knowledge-base/upload", isAuthenticated, uploadDocs.single('file'), async (req: any, res) => {
     try {
       const file = req.file;
       const chatbotId = parseInt(req.body.chatbotId);
       const title = req.body.title || file?.originalname || 'Uploaded File';
+      const userId = req.user?.claims?.sub;
 
       if (!file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -224,6 +243,11 @@ export async function registerRoutes(
 
       if (!chatbotId) {
         return res.status(400).json({ error: "chatbotId is required" });
+      }
+
+      const chatbot = await storage.getChatbot(chatbotId);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       let content = "";
@@ -263,12 +287,18 @@ export async function registerRoutes(
   });
 
   // Extract content from URL
-  app.post("/api/knowledge-base/url", async (req, res) => {
+  app.post("/api/knowledge-base/url", isAuthenticated, async (req: any, res) => {
     try {
       const { chatbotId, url, title } = req.body;
+      const userId = req.user?.claims?.sub;
 
       if (!chatbotId || !url) {
         return res.status(400).json({ error: "chatbotId and url are required" });
+      }
+
+      const chatbot = await storage.getChatbot(parseInt(chatbotId));
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       // Validate URL
@@ -347,13 +377,25 @@ export async function registerRoutes(
   // ==================== Analytics API ====================
 
   // Get analytics stats
-  app.get("/api/analytics/stats", async (req, res) => {
+  app.get("/api/analytics/stats", isAuthenticated, async (req: any, res) => {
     try {
       const chatbotId = req.query.chatbotId ? parseInt(req.query.chatbotId as string) : undefined;
       const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      const userId = req.user?.claims?.sub;
       
-      const stats = await storage.getAnalyticsStats(chatbotId, days);
-      res.json(stats);
+      if (chatbotId) {
+        const chatbot = await storage.getChatbot(chatbotId);
+        if (!chatbot || chatbot.userId !== userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const stats = await storage.getAnalyticsStats(chatbotId, days);
+        res.json(stats);
+      } else {
+        const userChatbots = await storage.getChatbotsByUser(userId);
+        const chatbotIds = userChatbots.map(c => c.id);
+        const stats = await storage.getAnalyticsStatsByIds(chatbotIds, days);
+        res.json(stats);
+      }
     } catch (error) {
       console.error("Error fetching analytics stats:", error);
       res.status(500).json({ error: "Failed to fetch analytics" });
@@ -361,13 +403,25 @@ export async function registerRoutes(
   });
 
   // Get daily stats for charts
-  app.get("/api/analytics/daily", async (req, res) => {
+  app.get("/api/analytics/daily", isAuthenticated, async (req: any, res) => {
     try {
       const chatbotId = req.query.chatbotId ? parseInt(req.query.chatbotId as string) : undefined;
       const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      const userId = req.user?.claims?.sub;
       
-      const dailyStats = await storage.getDailyStats(chatbotId, days);
-      res.json(dailyStats);
+      if (chatbotId) {
+        const chatbot = await storage.getChatbot(chatbotId);
+        if (!chatbot || chatbot.userId !== userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const dailyStats = await storage.getDailyStats(chatbotId, days);
+        res.json(dailyStats);
+      } else {
+        const userChatbots = await storage.getChatbotsByUser(userId);
+        const chatbotIds = userChatbots.map(c => c.id);
+        const dailyStats = await storage.getDailyStatsByIds(chatbotIds, days);
+        res.json(dailyStats);
+      }
     } catch (error) {
       console.error("Error fetching daily stats:", error);
       res.status(500).json({ error: "Failed to fetch daily stats" });
@@ -375,13 +429,25 @@ export async function registerRoutes(
   });
 
   // Get recent conversations
-  app.get("/api/analytics/conversations", async (req, res) => {
+  app.get("/api/analytics/conversations", isAuthenticated, async (req: any, res) => {
     try {
       const chatbotId = req.query.chatbotId ? parseInt(req.query.chatbotId as string) : undefined;
+      const userId = req.user?.claims?.sub;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
       
-      const conversations = await storage.getRecentConversations(chatbotId, limit);
-      res.json(conversations);
+      if (chatbotId) {
+        const chatbot = await storage.getChatbot(chatbotId);
+        if (!chatbot || chatbot.userId !== userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const conversations = await storage.getRecentConversations(chatbotId, limit);
+        res.json(conversations);
+      } else {
+        const userChatbots = await storage.getChatbotsByUser(userId);
+        const chatbotIds = userChatbots.map(c => c.id);
+        const conversations = await storage.getRecentConversationsByIds(chatbotIds, limit);
+        res.json(conversations);
+      }
     } catch (error) {
       console.error("Error fetching conversations:", error);
       res.status(500).json({ error: "Failed to fetch conversations" });
@@ -597,8 +663,8 @@ export async function registerRoutes(
   });
 
   // Upload avatar image for chatbot
-  app.post("/api/chatbots/:id/avatar", (req, res, next) => {
-    uploadImage.single('avatar')(req, res, (err) => {
+  app.post("/api/chatbots/:id/avatar", isAuthenticated, (req: any, res, next) => {
+    uploadImage.single('avatar')(req, res, (err: any) => {
       if (err) {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(400).json({ error: "La imagen es muy grande. Máximo 5MB" });
@@ -610,10 +676,11 @@ export async function registerRoutes(
       }
       next();
     });
-  }, async (req, res) => {
+  }, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
       const file = req.file;
+      const userId = req.user?.claims?.sub;
 
       if (!file) {
         return res.status(400).json({ error: "No se subió ninguna imagen" });
@@ -623,6 +690,11 @@ export async function registerRoutes(
       if (!chatbot) {
         try { fs.unlinkSync(file.path); } catch {}
         return res.status(404).json({ error: "Chatbot no encontrado" });
+      }
+
+      if (chatbot.userId !== userId) {
+        try { fs.unlinkSync(file.path); } catch {}
+        return res.status(403).json({ error: "Access denied" });
       }
 
       if (chatbot.avatarImage) {
@@ -645,13 +717,18 @@ export async function registerRoutes(
   });
 
   // Delete avatar image
-  app.delete("/api/chatbots/:id/avatar", async (req, res) => {
+  app.delete("/api/chatbots/:id/avatar", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
       const chatbot = await storage.getChatbot(id);
       
       if (!chatbot) {
         return res.status(404).json({ error: "Chatbot no encontrado" });
+      }
+
+      if (chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       if (chatbot.avatarImage) {
