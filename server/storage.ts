@@ -10,12 +10,15 @@ import type {
   InsertWidgetConversation,
   WidgetMessage,
   InsertWidgetMessage,
+  ConversationRating,
+  InsertConversationRating,
 } from "@shared/schema";
 import {
   chatbots,
   knowledgeBaseItems,
   widgetConversations,
   widgetMessages,
+  conversationRatings,
 } from "@shared/schema";
 
 export interface AnalyticsStats {
@@ -65,6 +68,21 @@ export interface IStorage {
   getRecentConversationsByIds(chatbotIds: number[], limit?: number): Promise<ConversationWithMessages[]>;
   getDailyStats(chatbotId?: number, daysBack?: number): Promise<DailyStats[]>;
   getDailyStatsByIds(chatbotIds: number[], daysBack?: number): Promise<DailyStats[]>;
+  
+  // Limits
+  getChatbotCountByUser(userId: string): Promise<number>;
+  getKnowledgeBaseCountByUser(userId: string): Promise<number>;
+  
+  // Ratings
+  createConversationRating(rating: InsertConversationRating): Promise<ConversationRating>;
+  getRatingsByConversation(conversationId: number): Promise<ConversationRating | undefined>;
+  getAverageRatingByIds(chatbotIds: number[]): Promise<number | null>;
+  
+  // Metrics
+  getAverageResponseTimeByIds(chatbotIds: number[], daysBack?: number): Promise<number | null>;
+  
+  // Conversation details
+  getConversationWithMessages(conversationId: number): Promise<ConversationWithMessages | undefined>;
 }
 
 const pool = new pg.Pool({
@@ -406,6 +424,98 @@ export class DatabaseStorage implements IStorage {
     }
 
     return stats;
+  }
+
+  // Limits
+  async getChatbotCountByUser(userId: string): Promise<number> {
+    const result = await db.select({ count: count() }).from(chatbots).where(eq(chatbots.userId, userId));
+    return result[0]?.count || 0;
+  }
+
+  async getKnowledgeBaseCountByUser(userId: string): Promise<number> {
+    const userChatbots = await this.getChatbotsByUser(userId);
+    const chatbotIds = userChatbots.map(c => c.id);
+    if (chatbotIds.length === 0) return 0;
+    
+    let total = 0;
+    for (const id of chatbotIds) {
+      const items = await db.select({ count: count() }).from(knowledgeBaseItems).where(eq(knowledgeBaseItems.chatbotId, id));
+      total += items[0]?.count || 0;
+    }
+    return total;
+  }
+
+  // Ratings
+  async createConversationRating(rating: InsertConversationRating): Promise<ConversationRating> {
+    const result = await db.insert(conversationRatings).values(rating).returning();
+    return result[0];
+  }
+
+  async getRatingsByConversation(conversationId: number): Promise<ConversationRating | undefined> {
+    const result = await db.select().from(conversationRatings).where(eq(conversationRatings.conversationId, conversationId));
+    return result[0];
+  }
+
+  async getAverageRatingByIds(chatbotIds: number[]): Promise<number | null> {
+    if (chatbotIds.length === 0) return null;
+    
+    const allConversations = await db.select().from(widgetConversations);
+    const filteredConvIds = allConversations
+      .filter(c => c.chatbotId && chatbotIds.includes(c.chatbotId))
+      .map(c => c.id);
+    
+    if (filteredConvIds.length === 0) return null;
+    
+    const allRatings = await db.select().from(conversationRatings);
+    const filteredRatings = allRatings.filter(r => filteredConvIds.includes(r.conversationId));
+    
+    if (filteredRatings.length === 0) return null;
+    
+    const sum = filteredRatings.reduce((acc, r) => acc + r.rating, 0);
+    return sum / filteredRatings.length;
+  }
+
+  // Metrics
+  async getAverageResponseTimeByIds(chatbotIds: number[], daysBack: number = 7): Promise<number | null> {
+    if (chatbotIds.length === 0) return null;
+    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysBack);
+    
+    const allConversations = await db.select().from(widgetConversations);
+    const filteredConvIds = allConversations
+      .filter(c => c.chatbotId && chatbotIds.includes(c.chatbotId))
+      .map(c => c.id);
+    
+    if (filteredConvIds.length === 0) return null;
+    
+    const allMessages = await db.select().from(widgetMessages).where(gte(widgetMessages.createdAt, startDate));
+    const assistantMessages = allMessages.filter(m => 
+      m.role === 'assistant' && 
+      m.responseTimeMs && 
+      m.conversationId && 
+      filteredConvIds.includes(m.conversationId)
+    );
+    
+    if (assistantMessages.length === 0) return null;
+    
+    const sum = assistantMessages.reduce((acc, m) => acc + (m.responseTimeMs || 0), 0);
+    return Math.round(sum / assistantMessages.length);
+  }
+
+  // Conversation details
+  async getConversationWithMessages(conversationId: number): Promise<ConversationWithMessages | undefined> {
+    const conversation = await this.getWidgetConversation(conversationId);
+    if (!conversation) return undefined;
+    
+    const messages = await this.getWidgetMessagesByConversation(conversationId);
+    const chatbot = conversation.chatbotId ? await this.getChatbot(conversation.chatbotId) : undefined;
+    
+    return {
+      conversation,
+      messages,
+      chatbotName: chatbot?.name || 'Unknown',
+    };
   }
 }
 

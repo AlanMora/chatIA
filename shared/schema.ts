@@ -82,8 +82,26 @@ export const widgetMessages = pgTable("widget_messages", {
   conversationId: integer("conversation_id").references(() => widgetConversations.id, { onDelete: "cascade" }),
   role: text("role").notNull(), // user or assistant
   content: text("content").notNull(),
+  responseTimeMs: integer("response_time_ms"), // Time to generate response in ms (for assistant messages)
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
+
+// Conversation ratings/feedback
+export const conversationRatings = pgTable("conversation_ratings", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").references(() => widgetConversations.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(), // 1-5 stars
+  feedback: text("feedback"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertConversationRatingSchema = createInsertSchema(conversationRatings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertConversationRating = z.infer<typeof insertConversationRatingSchema>;
+export type ConversationRating = typeof conversationRatings.$inferSelect;
 
 export const insertWidgetMessageSchema = createInsertSchema(widgetMessages).omit({
   id: true,

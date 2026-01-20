@@ -114,7 +114,8 @@ export async function registerRoutes(
     }
   });
 
-  // Create chatbot
+  // Create chatbot (with limit check)
+  const MAX_CHATBOTS_PER_USER = 10;
   app.post("/api/chatbots", isAuthenticated, async (req: any, res) => {
     try {
       const parsed = insertChatbotSchema.safeParse(req.body);
@@ -122,6 +123,16 @@ export async function registerRoutes(
         return res.status(400).json({ error: parsed.error.message });
       }
       const userId = req.user?.claims?.sub;
+      
+      // Check limit
+      const currentCount = await storage.getChatbotCountByUser(userId);
+      if (currentCount >= MAX_CHATBOTS_PER_USER) {
+        return res.status(400).json({ 
+          error: `Has alcanzado el límite de ${MAX_CHATBOTS_PER_USER} chatbots. Elimina uno para crear otro.`,
+          code: "LIMIT_REACHED"
+        });
+      }
+      
       const chatbot = await storage.createChatbot({ ...parsed.data, userId });
       res.status(201).json(chatbot);
     } catch (error) {
@@ -189,7 +200,8 @@ export async function registerRoutes(
     }
   });
 
-  // Create knowledge base item
+  // Create knowledge base item (with limit check)
+  const MAX_KB_ITEMS_PER_USER = 50;
   app.post("/api/knowledge-base", isAuthenticated, async (req: any, res) => {
     try {
       const parsed = insertKnowledgeBaseItemSchema.safeParse(req.body);
@@ -201,6 +213,16 @@ export async function registerRoutes(
       if (!chatbot || chatbot.userId !== userId) {
         return res.status(403).json({ error: "Access denied" });
       }
+      
+      // Check limit
+      const currentCount = await storage.getKnowledgeBaseCountByUser(userId);
+      if (currentCount >= MAX_KB_ITEMS_PER_USER) {
+        return res.status(400).json({ 
+          error: `Has alcanzado el límite de ${MAX_KB_ITEMS_PER_USER} elementos en la base de conocimiento.`,
+          code: "LIMIT_REACHED"
+        });
+      }
+      
       const item = await storage.createKnowledgeBaseItem(parsed.data);
       res.status(201).json(item);
     } catch (error) {
@@ -454,6 +476,165 @@ export async function registerRoutes(
     }
   });
 
+  // Get single conversation with full messages
+  app.get("/api/analytics/conversations/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      
+      const conversationDetails = await storage.getConversationWithMessages(conversationId);
+      if (!conversationDetails) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      
+      // Verify access
+      if (conversationDetails.conversation.chatbotId) {
+        const chatbot = await storage.getChatbot(conversationDetails.conversation.chatbotId);
+        if (!chatbot || chatbot.userId !== userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+      
+      res.json(conversationDetails);
+    } catch (error) {
+      console.error("Error fetching conversation details:", error);
+      res.status(500).json({ error: "Failed to fetch conversation" });
+    }
+  });
+
+  // Get extended metrics (response time, ratings)
+  app.get("/api/analytics/metrics", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const days = req.query.days ? parseInt(req.query.days as string) : 7;
+      const chatbotId = req.query.chatbotId ? parseInt(req.query.chatbotId as string) : null;
+      
+      let chatbotIds: number[];
+      if (chatbotId) {
+        const chatbot = await storage.getChatbot(chatbotId);
+        if (!chatbot || chatbot.userId !== userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        chatbotIds = [chatbotId];
+      } else {
+        const userChatbots = await storage.getChatbotsByUser(userId);
+        chatbotIds = userChatbots.map(c => c.id);
+      }
+      
+      if (chatbotIds.length === 0) {
+        return res.json({
+          averageResponseTimeMs: null,
+          averageRating: null,
+        });
+      }
+      
+      const avgResponseTime = await storage.getAverageResponseTimeByIds(chatbotIds, days);
+      const avgRating = await storage.getAverageRatingByIds(chatbotIds);
+      
+      res.json({
+        averageResponseTimeMs: avgResponseTime,
+        averageRating: avgRating,
+      });
+    } catch (error) {
+      console.error("Error fetching metrics:", error);
+      res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+  });
+
+  // ==================== Ratings API ====================
+
+  // Submit rating for a conversation (public endpoint for widget)
+  app.post("/api/widget/:chatbotId/rate", async (req, res) => {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId);
+      const { sessionId, rating, feedback } = req.body;
+      
+      if (!sessionId || !rating || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: "Valid sessionId and rating (1-5) required" });
+      }
+      
+      const chatbot = await storage.getChatbot(chatbotId);
+      if (!chatbot || !chatbot.isActive) {
+        return res.status(404).json({ error: "Chatbot not found" });
+      }
+      
+      const conversation = await storage.getWidgetConversationBySession(chatbotId, sessionId);
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      
+      // Check if already rated
+      const existingRating = await storage.getRatingsByConversation(conversation.id);
+      if (existingRating) {
+        return res.status(400).json({ error: "Conversation already rated" });
+      }
+      
+      const newRating = await storage.createConversationRating({
+        conversationId: conversation.id,
+        rating,
+        feedback: feedback || null,
+      });
+      
+      res.status(201).json(newRating);
+    } catch (error) {
+      console.error("Error submitting rating:", error);
+      res.status(500).json({ error: "Failed to submit rating" });
+    }
+  });
+
+  // ==================== Export API ====================
+
+  // Export all user data (chatbots, KB, conversations)
+  app.get("/api/export", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      
+      const chatbots = await storage.getChatbotsByUser(userId);
+      const chatbotIds = chatbots.map(c => c.id);
+      
+      const exportData: any = {
+        exportedAt: new Date().toISOString(),
+        chatbots: [],
+      };
+      
+      for (const chatbot of chatbots) {
+        const knowledgeBase = await storage.getKnowledgeBaseItemsByChatbot(chatbot.id);
+        const conversations = await storage.getRecentConversations(chatbot.id, 100);
+        
+        exportData.chatbots.push({
+          ...chatbot,
+          knowledgeBase,
+          conversations,
+        });
+      }
+      
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="chatbot-export-${Date.now()}.json"`);
+      res.json(exportData);
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
+  // Get user limits info
+  app.get("/api/user/limits", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      
+      const chatbotCount = await storage.getChatbotCountByUser(userId);
+      const kbCount = await storage.getKnowledgeBaseCountByUser(userId);
+      
+      res.json({
+        chatbots: { current: chatbotCount, max: MAX_CHATBOTS_PER_USER },
+        knowledgeBaseItems: { current: kbCount, max: MAX_KB_ITEMS_PER_USER },
+      });
+    } catch (error) {
+      console.error("Error fetching limits:", error);
+      res.status(500).json({ error: "Failed to fetch limits" });
+    }
+  });
+
   // ==================== Widget API ====================
 
   // Get widget config (for embedded widget)
@@ -533,6 +714,7 @@ export async function registerRoutes(
       let fullResponse = "";
       const aiProvider = chatbot.aiProvider || "openai";
       const aiModel = chatbot.aiModel || "gpt-5";
+      const startTime = Date.now();
 
       if (aiProvider === "custom") {
         // Build OpenAI-compatible messages for custom endpoint
@@ -623,14 +805,16 @@ export async function registerRoutes(
         }
       }
 
-      // Save assistant message
+      // Save assistant message with response time
+      const responseTimeMs = Date.now() - startTime;
       await storage.createWidgetMessage({
         conversationId: conversation.id,
         role: "assistant",
         content: fullResponse,
+        responseTimeMs,
       });
 
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, responseTimeMs })}\n\n`);
       res.end();
     } catch (error) {
       console.error("Error in widget chat:", error);

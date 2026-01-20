@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -8,12 +9,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BarChart3, MessageSquare, Users, Clock, TrendingUp } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { BarChart3, MessageSquare, Users, Clock, TrendingUp, Star, Download, Eye } from "lucide-react";
 import { useState } from "react";
 import type { Chatbot } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
+import { useToast } from "@/hooks/use-toast";
 
 interface AnalyticsStats {
   totalConversations: number;
@@ -24,10 +33,24 @@ interface AnalyticsStats {
   messagesToday: number;
 }
 
+interface Metrics {
+  averageResponseTimeMs: number | null;
+  averageRating: number | null;
+}
+
 interface DailyStats {
   date: string;
   conversations: number;
   messages: number;
+}
+
+interface Message {
+  id: number;
+  conversationId: number | null;
+  role: string;
+  content: string;
+  responseTimeMs?: number | null;
+  createdAt: string;
 }
 
 interface ConversationWithMessages {
@@ -37,21 +60,18 @@ interface ConversationWithMessages {
     sessionId: string;
     createdAt: string;
   };
-  messages: {
-    id: number;
-    conversationId: number | null;
-    role: string;
-    content: string;
-    createdAt: string;
-  }[];
+  messages: Message[];
   chatbotName: string;
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
 
 export default function Analytics() {
+  const { toast } = useToast();
   const [selectedChatbot, setSelectedChatbot] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<string>("7d");
+  const [selectedConversation, setSelectedConversation] = useState<ConversationWithMessages | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const getDaysFromRange = (range: string) => {
     switch (range) {
@@ -78,6 +98,14 @@ export default function Analytics() {
     },
   });
 
+  const { data: metrics, isLoading: metricsLoading } = useQuery<Metrics>({
+    queryKey: ["/api/analytics/metrics", selectedChatbot, days],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics/metrics?days=${days}${chatbotIdParam}`);
+      return res.json();
+    },
+  });
+
   const { data: dailyStats, isLoading: dailyLoading } = useQuery<DailyStats[]>({
     queryKey: ["/api/analytics/daily", selectedChatbot, days],
     queryFn: async () => {
@@ -89,16 +117,44 @@ export default function Analytics() {
   const { data: conversations, isLoading: conversationsLoading } = useQuery<ConversationWithMessages[]>({
     queryKey: ["/api/analytics/conversations", selectedChatbot],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/conversations?limit=5${chatbotIdParam}`);
+      const res = await fetch(`/api/analytics/conversations?limit=10${chatbotIdParam}`);
       return res.json();
     },
   });
 
-  const isLoading = statsLoading || dailyLoading || conversationsLoading;
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const res = await fetch('/api/export');
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chatbot-export-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast({ title: "Exportación completada", description: "Tus datos han sido descargados." });
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudo exportar los datos.", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const isLoading = statsLoading || dailyLoading || conversationsLoading || metricsLoading;
+
+  const formatResponseTime = (ms: number | null) => {
+    if (ms === null) return "—";
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  };
 
   const statCards = [
     {
-      title: "Conversaciones Totales",
+      title: "Conversaciones",
       value: stats?.totalConversations?.toString() || "0",
       change: `+${stats?.conversationsToday || 0} hoy`,
       changeType: (stats?.conversationsToday || 0) > 0 ? "positive" as const : "neutral" as const,
@@ -107,7 +163,7 @@ export default function Analytics() {
       bgColor: "bg-blue-500/10",
     },
     {
-      title: "Mensajes Intercambiados",
+      title: "Mensajes",
       value: stats?.totalMessages?.toString() || "0",
       change: `+${stats?.messagesToday || 0} hoy`,
       changeType: (stats?.messagesToday || 0) > 0 ? "positive" as const : "neutral" as const,
@@ -116,22 +172,22 @@ export default function Analytics() {
       bgColor: "bg-green-500/10",
     },
     {
-      title: "Mensajes de Usuario",
-      value: stats?.userMessages?.toString() || "0",
-      change: `${Math.round(((stats?.userMessages || 0) / (stats?.totalMessages || 1)) * 100)}% del total`,
+      title: "Tiempo de Respuesta",
+      value: formatResponseTime(metrics?.averageResponseTimeMs || null),
+      change: "Promedio",
       changeType: "neutral" as const,
       icon: Clock,
       color: "text-orange-500",
       bgColor: "bg-orange-500/10",
     },
     {
-      title: "Respuestas del Bot",
-      value: stats?.assistantMessages?.toString() || "0",
-      change: `${Math.round(((stats?.assistantMessages || 0) / (stats?.totalMessages || 1)) * 100)}% del total`,
+      title: "Satisfacción",
+      value: metrics?.averageRating ? `${metrics.averageRating.toFixed(1)}/5` : "—",
+      change: metrics?.averageRating ? "Calificación promedio" : "Sin datos",
       changeType: "neutral" as const,
-      icon: TrendingUp,
-      color: "text-purple-500",
-      bgColor: "bg-purple-500/10",
+      icon: Star,
+      color: "text-yellow-500",
+      bgColor: "bg-yellow-500/10",
     },
   ];
 
@@ -155,6 +211,15 @@ export default function Analytics() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <Button 
+            variant="outline" 
+            onClick={handleExport} 
+            disabled={isExporting}
+            data-testid="button-export"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {isExporting ? "Exportando..." : "Exportar Datos"}
+          </Button>
           {chatbotsLoading ? (
             <Skeleton className="h-10 w-48" />
           ) : (
@@ -312,7 +377,7 @@ export default function Analytics() {
       <Card>
         <CardHeader>
           <CardTitle>Conversaciones Recientes</CardTitle>
-          <CardDescription>Últimas interacciones con tus chatbots</CardDescription>
+          <CardDescription>Últimas interacciones con tus chatbots (haz clic para ver detalles)</CardDescription>
         </CardHeader>
         <CardContent>
           {conversationsLoading ? (
@@ -326,17 +391,20 @@ export default function Analytics() {
               {conversations?.map((conv) => (
                 <div 
                   key={conv.conversation.id} 
-                  className="rounded-lg border p-4"
+                  className="rounded-lg border p-4 cursor-pointer hover-elevate"
+                  onClick={() => setSelectedConversation(conv)}
                   data-testid={`conversation-${conv.conversation.id}`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium">{conv.chatbotName}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(conv.conversation.createdAt), { 
-                        addSuffix: true, 
-                        locale: es 
-                      })}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(conv.conversation.createdAt), { 
+                          addSuffix: true, 
+                          locale: es 
+                        })}
+                      </span>
+                    </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {conv.messages.length} mensajes en esta conversación
@@ -366,6 +434,44 @@ export default function Analytics() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!selectedConversation} onOpenChange={() => setSelectedConversation(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Conversación con {selectedConversation?.chatbotName}</DialogTitle>
+            <DialogDescription>
+              {selectedConversation && formatDistanceToNow(new Date(selectedConversation.conversation.createdAt), { 
+                addSuffix: true, 
+                locale: es 
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-4 p-4">
+            {selectedConversation?.messages.map((msg) => (
+              <div 
+                key={msg.id}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div 
+                  className={`max-w-[80%] rounded-lg p-3 ${
+                    msg.role === 'user' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-muted'
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  <div className={`text-xs mt-1 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                    {new Date(msg.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    {msg.role === 'assistant' && msg.responseTimeMs && (
+                      <span className="ml-2">({formatResponseTime(msg.responseTimeMs)})</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

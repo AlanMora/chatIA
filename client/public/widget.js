@@ -285,6 +285,64 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.6; }
     }
+    .chatbot-widget-rating {
+      padding: 12px 16px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    .chatbot-widget-rating-text {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+    .chatbot-widget-rating-stars {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+    .chatbot-widget-rating-star {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      font-size: 20px;
+      color: #cbd5e1;
+      transition: color 0.2s, transform 0.2s;
+    }
+    .chatbot-widget-rating-star:hover {
+      color: #fbbf24;
+      transform: scale(1.2);
+    }
+    .chatbot-widget-rating-dismiss {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #94a3b8;
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+    .chatbot-widget-rating-dismiss:hover {
+      color: #64748b;
+    }
+    .chatbot-widget-error {
+      padding: 8px 16px;
+      background: #fef2f2;
+      border-top: 1px solid #fecaca;
+      font-size: 12px;
+      color: #dc2626;
+      text-align: center;
+    }
+    .chatbot-widget-error-retry {
+      background: #dc2626;
+      color: white;
+      border: none;
+      padding: 4px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-left: 8px;
+      font-size: 11px;
+    }
     @media (max-width: 480px) {
       .chatbot-widget-container {
         width: 100%;
@@ -314,6 +372,11 @@
   let isVoiceActive = false;
   let isVoiceConnecting = false;
   let conversation = null;
+  let hasError = false;
+  let errorMessage = '';
+  let hasRated = false;
+  let showRating = false;
+  let lastUserMessage = '';
   let sessionId = localStorage.getItem('chatbot-session-' + chatbotId) || generateId();
   localStorage.setItem('chatbot-session-' + chatbotId, sessionId);
   
@@ -432,6 +495,25 @@
             ${iconSend}
           </button>
         </div>
+        ${hasError ? `
+          <div class="chatbot-widget-error">
+            ${errorMessage}
+            <button class="chatbot-widget-error-retry" id="chatbot-error-retry">Reintentar</button>
+          </div>
+        ` : ''}
+        ${showRating ? `
+          <div class="chatbot-widget-rating">
+            <div class="chatbot-widget-rating-text">¿Cómo fue tu experiencia?</div>
+            <div class="chatbot-widget-rating-stars">
+              <button class="chatbot-widget-rating-star" data-rating="1">★</button>
+              <button class="chatbot-widget-rating-star" data-rating="2">★</button>
+              <button class="chatbot-widget-rating-star" data-rating="3">★</button>
+              <button class="chatbot-widget-rating-star" data-rating="4">★</button>
+              <button class="chatbot-widget-rating-star" data-rating="5">★</button>
+            </div>
+            <button class="chatbot-widget-rating-dismiss" id="chatbot-rating-dismiss">No, gracias</button>
+          </div>
+        ` : ''}
       </div>
     `;
     
@@ -467,6 +549,34 @@
     const voiceEndBtn = document.getElementById('chatbot-voice-end');
     if (voiceEndBtn) {
       voiceEndBtn.onclick = endVoiceConversation;
+    }
+    
+    const ratingStars = document.querySelectorAll('.chatbot-widget-rating-star');
+    ratingStars.forEach(function(star) {
+      star.onclick = function() {
+        const rating = parseInt(star.getAttribute('data-rating'));
+        submitRating(rating);
+      };
+    });
+    
+    const ratingDismiss = document.getElementById('chatbot-rating-dismiss');
+    if (ratingDismiss) {
+      ratingDismiss.onclick = dismissRating;
+    }
+    
+    const errorRetry = document.getElementById('chatbot-error-retry');
+    if (errorRetry) {
+      errorRetry.onclick = function() {
+        hasError = false;
+        errorMessage = '';
+        if (lastUserMessage) {
+          messages = messages.filter(m => m.content !== lastUserMessage || m.role !== 'user');
+          messages = messages.filter(m => !m.content.includes('Lo siento, hubo un problema'));
+          sendMessage(lastUserMessage);
+        } else {
+          render();
+        }
+      };
     }
     
     const messagesContainer = document.getElementById('chatbot-messages');
@@ -553,6 +663,9 @@
   }
   
   async function sendMessage(text) {
+    lastUserMessage = text;
+    hasError = false;
+    errorMessage = '';
     messages.push({ role: 'user', content: text });
     isLoading = true;
     render();
@@ -594,11 +707,39 @@
       }
     } catch (error) {
       console.error('ChatBot Widget: Chat error', error);
-      messages.push({ role: 'assistant', content: 'Sorry, something went wrong. Please try again.' });
+      hasError = true;
+      errorMessage = 'No se pudo conectar. Por favor, verifica tu conexión e intenta de nuevo.';
+      messages.push({ role: 'assistant', content: 'Lo siento, hubo un problema de conexión. Por favor, intenta de nuevo.' });
     } finally {
       isLoading = false;
+      if (messages.length > 4 && !hasRated) {
+        showRating = true;
+      }
       render();
     }
+  }
+  
+  async function submitRating(rating) {
+    try {
+      const response = await fetch(baseUrl + '/api/widget/' + chatbotId + '/rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionId, rating: rating })
+      });
+      if (response.ok) {
+        hasRated = true;
+        showRating = false;
+        render();
+      }
+    } catch (e) {
+      console.error('Failed to submit rating', e);
+    }
+  }
+  
+  function dismissRating() {
+    showRating = false;
+    hasRated = true;
+    render();
   }
   
   fetchConfig();
