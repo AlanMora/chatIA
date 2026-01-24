@@ -102,11 +102,15 @@ To embed a chatbot on an external website:
 - **ElevenLabs protection**: All admin endpoints for voice configuration require authentication
 
 ## ElevenLabs Voice Integration
-- **Admin page** (/elevenlabs): Configure voice, upload documents, sync KB
+- **Per-chatbot voice agents**: Each chatbot can have its own ElevenLabs Agent ID configured
+- **Admin page** (/elevenlabs): Configure global voice settings, upload documents, sync KB
+- **Chatbot voice config**: elevenLabsAgentId field in chatbot editor (Voice tab)
 - **Voice in chat preview**: VoiceChat component integrated in chatbot preview
-- **Voice in widget**: WebSocket-based voice support in embeddable widget
-- **Endpoints**: /api/elevenlabs/voices, /api/elevenlabs/agent, /api/elevenlabs/knowledge-base
-- **Secrets**: ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID
+- **Voice in widget**: WebSocket-based voice support using chatbot-specific agent
+- **Endpoints**: 
+  - /api/elevenlabs/voices, /api/elevenlabs/agent, /api/elevenlabs/knowledge-base (global)
+  - /api/widget/:chatbotId/voice/signed-url (per-chatbot voice connection)
+- **Secrets**: ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID (for global settings)
 
 ## Known Limitations
 - Analytics don't track response times or satisfaction ratings yet

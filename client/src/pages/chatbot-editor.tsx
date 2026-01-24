@@ -52,6 +52,7 @@ const chatbotFormSchema = z.object({
   maxTokens: z.coerce.number().min(100).max(8192),
   isActive: z.boolean(),
   avatarImage: z.string().nullable().optional(),
+  elevenLabsAgentId: z.string().optional(),
 });
 
 type ChatbotFormValues = z.infer<typeof chatbotFormSchema>;
@@ -106,6 +107,7 @@ export default function ChatbotEditor() {
       maxTokens: 1024,
       isActive: true,
       avatarImage: null,
+      elevenLabsAgentId: "",
     },
     values: chatbot ? {
       name: chatbot.name,
@@ -124,6 +126,7 @@ export default function ChatbotEditor() {
       maxTokens: chatbot.maxTokens || 1024,
       isActive: chatbot.isActive ?? true,
       avatarImage: chatbot.avatarImage || null,
+      elevenLabsAgentId: chatbot.elevenLabsAgentId || "",
     } : undefined,
   });
 
@@ -761,16 +764,49 @@ export default function ChatbotEditor() {
                 </TabsContent>
 
                 <TabsContent value="voice" className="mt-4 space-y-4">
-                  {!isNew && chatbotId ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Mic className="h-5 w-5" />
+                        Configuración de Voz
+                      </CardTitle>
+                      <CardDescription>
+                        Configura un agente de ElevenLabs para habilitar conversaciones por voz en este chatbot
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="elevenLabsAgentId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>ElevenLabs Agent ID</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="ej: abc123xyz..."
+                                {...field}
+                                data-testid="input-elevenlabs-agent-id"
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Ingresa el ID del agente de ElevenLabs para este chatbot. 
+                              Puedes obtenerlo desde el panel de ElevenLabs Conversational AI.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {form.watch("elevenLabsAgentId") && (
+                        <div className="p-3 bg-muted rounded-md">
+                          <p className="text-sm text-muted-foreground">
+                            El botón de voz aparecerá en el widget cuando el agente esté configurado correctamente.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                  {!isNew && chatbotId && (
                     <ElevenLabsSettings chatbotId={chatbotId} />
-                  ) : (
-                    <Card>
-                      <CardContent className="py-8 text-center">
-                        <p className="text-muted-foreground">
-                          Guarda el chatbot primero para configurar las opciones de voz
-                        </p>
-                      </CardContent>
-                    </Card>
                   )}
                 </TabsContent>
               </Tabs>
@@ -808,6 +844,8 @@ export default function ChatbotEditor() {
                     maxTokens: watchedValues.maxTokens || 1024,
                     isActive: watchedValues.isActive ?? true,
                     avatarImage: watchedValues.avatarImage || null,
+                    elevenLabsAgentId: watchedValues.elevenLabsAgentId || null,
+                    userId: chatbot?.userId || null,
                     createdAt: new Date(),
                   }}
                   isPreview
