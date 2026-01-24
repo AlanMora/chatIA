@@ -29,6 +29,8 @@ export const chatbots = pgTable("chatbots", {
   temperature: text("temperature").default("0.7"),
   maxTokens: integer("max_tokens").default(1024),
   isActive: boolean("is_active").default(true),
+  // ElevenLabs voice settings (per chatbot)
+  elevenLabsAgentId: text("elevenlabs_agent_id"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

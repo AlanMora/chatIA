@@ -656,10 +656,53 @@ export async function registerRoutes(
         position: chatbot.position,
         welcomeMessage: chatbot.welcomeMessage,
         avatarImage: chatbot.avatarImage,
+        elevenLabsAgentId: chatbot.elevenLabsAgentId,
       });
     } catch (error) {
       console.error("Error fetching widget config:", error);
       res.status(500).json({ error: "Failed to fetch widget config" });
+    }
+  });
+
+  // Get signed URL for voice chat (per chatbot)
+  app.get("/api/widget/:chatbotId/voice/signed-url", async (req, res) => {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId);
+      const chatbot = await storage.getChatbot(chatbotId);
+      
+      if (!chatbot) {
+        return res.status(404).json({ error: "Chatbot not found" });
+      }
+      
+      if (!chatbot.elevenLabsAgentId) {
+        return res.status(400).json({ error: "Voice not configured for this chatbot" });
+      }
+      
+      const apiKey = process.env.ELEVENLABS_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({ error: "ElevenLabs API key not configured" });
+      }
+      
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${chatbot.elevenLabsAgentId}`,
+        {
+          headers: {
+            "xi-api-key": apiKey,
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("ElevenLabs signed URL error:", error);
+        return res.status(response.status).json({ error: "Failed to get signed URL" });
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Error getting chatbot voice signed URL:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 

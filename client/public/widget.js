@@ -395,13 +395,12 @@
         messages.push({ role: 'assistant', content: config.welcomeMessage });
       }
       
-      try {
-        const voiceResponse = await fetch(baseUrl + '/api/elevenlabs/config');
-        if (voiceResponse.ok) {
-          voiceConfig = await voiceResponse.json();
-        }
-      } catch (e) {
-        console.log('Voice features not available');
+      // Check if this chatbot has its own ElevenLabs agent configured
+      if (config.elevenLabsAgentId) {
+        voiceConfig = {
+          agentId: config.elevenLabsAgentId,
+          enabled: true,
+        };
       }
       
       render();
@@ -592,7 +591,8 @@
       
       await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      const signedUrlResponse = await fetch(baseUrl + '/api/elevenlabs/signed-url');
+      // Use the chatbot-specific voice endpoint
+      const signedUrlResponse = await fetch(baseUrl + '/api/widget/' + chatbotId + '/voice/signed-url');
       if (!signedUrlResponse.ok) {
         throw new Error('No se pudo obtener conexión de voz');
       }
