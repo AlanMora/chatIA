@@ -995,5 +995,177 @@ Remember: Always prioritize information from the knowledge base above. Do not ma
     }
   });
 
+  // ==================== Predefined Responses ====================
+  
+  // Get predefined responses for a chatbot
+  app.get("/api/predefined-responses/:chatbotId", isAuthenticated, async (req: any, res) => {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId);
+      const userId = req.user?.claims?.sub;
+      
+      const chatbot = await storage.getChatbot(chatbotId);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const responses = await storage.getPredefinedResponsesByChatbot(chatbotId);
+      res.json(responses);
+    } catch (error) {
+      console.error("Error fetching predefined responses:", error);
+      res.status(500).json({ error: "Failed to fetch responses" });
+    }
+  });
+
+  // Create predefined response
+  app.post("/api/predefined-responses", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const { chatbotId, title, content, category } = req.body;
+      
+      const chatbot = await storage.getChatbot(chatbotId);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const response = await storage.createPredefinedResponse({
+        chatbotId,
+        title,
+        content,
+        category,
+        isActive: true,
+      });
+      res.json(response);
+    } catch (error) {
+      console.error("Error creating predefined response:", error);
+      res.status(500).json({ error: "Failed to create response" });
+    }
+  });
+
+  // Update predefined response
+  app.patch("/api/predefined-responses/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const response = await storage.updatePredefinedResponse(id, updates);
+      res.json(response);
+    } catch (error) {
+      console.error("Error updating predefined response:", error);
+      res.status(500).json({ error: "Failed to update response" });
+    }
+  });
+
+  // Delete predefined response
+  app.delete("/api/predefined-responses/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deletePredefinedResponse(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting predefined response:", error);
+      res.status(500).json({ error: "Failed to delete response" });
+    }
+  });
+
+  // ==================== Notifications ====================
+  
+  // Get notifications for user
+  app.get("/api/notifications", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const unreadOnly = req.query.unreadOnly === 'true';
+      
+      const notificationsList = await storage.getNotificationsByUser(userId, unreadOnly);
+      res.json(notificationsList);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  // Get unread notification count
+  app.get("/api/notifications/count", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const count = await storage.getUnreadNotificationCount(userId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching notification count:", error);
+      res.status(500).json({ error: "Failed to fetch count" });
+    }
+  });
+
+  // Mark notification as read
+  app.patch("/api/notifications/:id/read", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.markNotificationAsRead(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "Failed to mark as read" });
+    }
+  });
+
+  // Mark all notifications as read
+  app.patch("/api/notifications/read-all", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      await storage.markAllNotificationsAsRead(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ error: "Failed to mark all as read" });
+    }
+  });
+
+  // ==================== Widget Lead Capture ====================
+  
+  // Update conversation with visitor info (for lead capture)
+  app.patch("/api/widget/:chatbotId/conversation/:sessionId/visitor", async (req, res) => {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId);
+      const sessionId = req.params.sessionId;
+      const { visitorName, visitorEmail, visitorPhone, visitorCompany } = req.body;
+      
+      const conversation = await storage.getWidgetConversationBySession(chatbotId, sessionId);
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      
+      const updated = await storage.updateWidgetConversation(conversation.id, {
+        visitorName,
+        visitorEmail,
+        visitorPhone,
+        visitorCompany,
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating visitor info:", error);
+      res.status(500).json({ error: "Failed to update visitor info" });
+    }
+  });
+
+  // Get widget config including lead capture settings
+  app.get("/api/widget/:chatbotId/lead-config", async (req, res) => {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId);
+      const chatbot = await storage.getChatbot(chatbotId);
+      
+      if (!chatbot) {
+        return res.status(404).json({ error: "Chatbot not found" });
+      }
+      
+      res.json({
+        requireLeadCapture: chatbot.requireLeadCapture || false,
+        leadCaptureFields: chatbot.leadCaptureFields?.split(',') || ['name', 'email'],
+      });
+    } catch (error) {
+      console.error("Error fetching lead config:", error);
+      res.status(500).json({ error: "Failed to fetch lead config" });
+    }
+  });
+
   return httpServer;
 }

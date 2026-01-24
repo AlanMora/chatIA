@@ -12,6 +12,10 @@ import type {
   InsertWidgetMessage,
   ConversationRating,
   InsertConversationRating,
+  PredefinedResponse,
+  InsertPredefinedResponse,
+  Notification,
+  InsertNotification,
 } from "@shared/schema";
 import {
   chatbots,
@@ -19,6 +23,8 @@ import {
   widgetConversations,
   widgetMessages,
   conversationRatings,
+  predefinedResponses,
+  notifications,
 } from "@shared/schema";
 
 export interface AnalyticsStats {
@@ -83,6 +89,22 @@ export interface IStorage {
   
   // Conversation details
   getConversationWithMessages(conversationId: number): Promise<ConversationWithMessages | undefined>;
+  
+  // Predefined responses
+  getPredefinedResponsesByChatbot(chatbotId: number): Promise<PredefinedResponse[]>;
+  createPredefinedResponse(response: InsertPredefinedResponse): Promise<PredefinedResponse>;
+  updatePredefinedResponse(id: number, updates: Partial<InsertPredefinedResponse>): Promise<PredefinedResponse | undefined>;
+  deletePredefinedResponse(id: number): Promise<void>;
+  
+  // Notifications
+  getNotificationsByUser(userId: string, unreadOnly?: boolean): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationAsRead(id: number): Promise<void>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
+  
+  // Update conversation with visitor info
+  updateWidgetConversation(id: number, updates: Partial<InsertWidgetConversation>): Promise<WidgetConversation | undefined>;
 }
 
 const pool = new pg.Pool({
@@ -516,6 +538,72 @@ export class DatabaseStorage implements IStorage {
       messages,
       chatbotName: chatbot?.name || 'Unknown',
     };
+  }
+
+  // Predefined responses
+  async getPredefinedResponsesByChatbot(chatbotId: number): Promise<PredefinedResponse[]> {
+    return db.select().from(predefinedResponses)
+      .where(eq(predefinedResponses.chatbotId, chatbotId))
+      .orderBy(desc(predefinedResponses.createdAt));
+  }
+
+  async createPredefinedResponse(response: InsertPredefinedResponse): Promise<PredefinedResponse> {
+    const result = await db.insert(predefinedResponses).values(response).returning();
+    return result[0];
+  }
+
+  async updatePredefinedResponse(id: number, updates: Partial<InsertPredefinedResponse>): Promise<PredefinedResponse | undefined> {
+    const result = await db.update(predefinedResponses)
+      .set(updates)
+      .where(eq(predefinedResponses.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deletePredefinedResponse(id: number): Promise<void> {
+    await db.delete(predefinedResponses).where(eq(predefinedResponses.id, id));
+  }
+
+  // Notifications
+  async getNotificationsByUser(userId: string, unreadOnly: boolean = false): Promise<Notification[]> {
+    if (unreadOnly) {
+      return db.select().from(notifications)
+        .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
+        .orderBy(desc(notifications.createdAt));
+    }
+    return db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const result = await db.insert(notifications).values(notification).returning();
+    return result[0];
+  }
+
+  async markNotificationAsRead(id: number): Promise<void> {
+    await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const result = await db.select({ count: count() }).from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+    return result[0]?.count || 0;
+  }
+
+  // Update conversation with visitor info
+  async updateWidgetConversation(id: number, updates: Partial<InsertWidgetConversation>): Promise<WidgetConversation | undefined> {
+    const result = await db.update(widgetConversations)
+      .set(updates)
+      .where(eq(widgetConversations.id, id))
+      .returning();
+    return result[0];
   }
 }
 

@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LogOut, User } from "lucide-react";
+import { NotificationsBell } from "@/components/notifications-bell";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Chatbots from "@/pages/chatbots";
@@ -21,6 +22,7 @@ import EmbedPage from "@/pages/embed";
 import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import ChatbotPreview from "@/pages/chatbot-preview";
+import ChatbotTest from "@/pages/chatbot-test";
 import Landing from "@/pages/landing";
 import ElevenLabsPage from "@/pages/elevenlabs";
 
@@ -30,6 +32,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/chatbots" component={Chatbots} />
       <Route path="/chatbots/:id/preview" component={ChatbotPreview} />
+      <Route path="/chatbots/:id/test" component={ChatbotTest} />
       <Route path="/chatbots/:id" component={ChatbotEditor} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/embed" component={EmbedPage} />
@@ -60,6 +63,7 @@ function AuthenticatedApp() {
           <header className="sticky top-0 z-50 flex h-14 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-2">
+              <NotificationsBell />
               <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

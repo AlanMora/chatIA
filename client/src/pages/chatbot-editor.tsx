@@ -27,12 +27,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Save, Eye, Upload, X, ImageIcon, Mic } from "lucide-react";
+import { ArrowLeft, Save, Eye, Upload, X, ImageIcon, Mic, Play, UserCheck, MessageSquare } from "lucide-react";
 import { Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ChatWidget } from "@/components/chat-widget";
 import { ElevenLabsSettings } from "@/components/elevenlabs-settings";
+import { PredefinedResponses } from "@/components/predefined-responses";
 import type { Chatbot } from "@shared/schema";
 
 const chatbotFormSchema = z.object({
@@ -53,6 +54,8 @@ const chatbotFormSchema = z.object({
   isActive: z.boolean(),
   avatarImage: z.string().nullable().optional(),
   elevenLabsAgentId: z.string().optional(),
+  requireLeadCapture: z.boolean().optional(),
+  leadCaptureFields: z.string().optional(),
 });
 
 type ChatbotFormValues = z.infer<typeof chatbotFormSchema>;
@@ -108,6 +111,8 @@ export default function ChatbotEditor() {
       isActive: true,
       avatarImage: null,
       elevenLabsAgentId: "",
+      requireLeadCapture: false,
+      leadCaptureFields: "name,email",
     },
     values: chatbot ? {
       name: chatbot.name,
@@ -127,6 +132,8 @@ export default function ChatbotEditor() {
       isActive: chatbot.isActive ?? true,
       avatarImage: chatbot.avatarImage || null,
       elevenLabsAgentId: chatbot.elevenLabsAgentId || "",
+      requireLeadCapture: chatbot.requireLeadCapture ?? false,
+      leadCaptureFields: chatbot.leadCaptureFields || "name,email",
     } : undefined,
   });
 
@@ -298,6 +305,14 @@ export default function ChatbotEditor() {
             {isNew ? "Configura tu nuevo chatbot de IA" : `Editando ${chatbot?.name}`}
           </p>
         </div>
+        {!isNew && chatbotId && (
+          <Button variant="outline" asChild data-testid="button-test-live">
+            <Link href={`/chatbots/${chatbotId}/test`}>
+              <Play className="mr-2 h-4 w-4" />
+              Probar en Vivo
+            </Link>
+          </Button>
+        )}
         <Button
           onClick={form.handleSubmit(onSubmit)}
           disabled={createMutation.isPending || updateMutation.isPending}
@@ -313,10 +328,18 @@ export default function ChatbotEditor() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="w-full">
+                <TabsList className="w-full flex-wrap">
                   <TabsTrigger value="basic" className="flex-1" data-testid="tab-basic">Básico</TabsTrigger>
-                  <TabsTrigger value="ai" className="flex-1" data-testid="tab-ai">Configuración IA</TabsTrigger>
+                  <TabsTrigger value="ai" className="flex-1" data-testid="tab-ai">IA</TabsTrigger>
                   <TabsTrigger value="appearance" className="flex-1" data-testid="tab-appearance">Apariencia</TabsTrigger>
+                  <TabsTrigger value="leads" className="flex-1" data-testid="tab-leads">
+                    <UserCheck className="mr-1 h-3 w-3" />
+                    Leads
+                  </TabsTrigger>
+                  <TabsTrigger value="responses" className="flex-1" data-testid="tab-responses">
+                    <MessageSquare className="mr-1 h-3 w-3" />
+                    Respuestas
+                  </TabsTrigger>
                   <TabsTrigger value="voice" className="flex-1" data-testid="tab-voice">
                     <Mic className="mr-1 h-3 w-3" />
                     Voz
@@ -763,6 +786,98 @@ export default function ChatbotEditor() {
                   </Card>
                 </TabsContent>
 
+                <TabsContent value="leads" className="mt-4 space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <UserCheck className="h-5 w-5" />
+                        Captura de Leads
+                      </CardTitle>
+                      <CardDescription>
+                        Solicita información de contacto antes de iniciar la conversación
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="requireLeadCapture"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-base">Activar captura de datos</FormLabel>
+                              <FormDescription>
+                                Muestra un formulario antes de iniciar el chat
+                              </FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                data-testid="switch-lead-capture"
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      {form.watch("requireLeadCapture") && (
+                        <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+                          <div className="space-y-2">
+                            <FormLabel>Campos a solicitar</FormLabel>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { id: "name", label: "Nombre" },
+                                { id: "email", label: "Email" },
+                                { id: "phone", label: "Teléfono" },
+                                { id: "company", label: "Empresa" },
+                              ].map((field) => {
+                                const currentFields = form.watch("leadCaptureFields")?.split(",") || [];
+                                const isChecked = currentFields.includes(field.id);
+                                return (
+                                  <label
+                                    key={field.id}
+                                    className="flex items-center gap-2 p-3 bg-background rounded-md border cursor-pointer hover-elevate"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        const newFields = e.target.checked
+                                          ? [...currentFields, field.id]
+                                          : currentFields.filter((f) => f !== field.id);
+                                        form.setValue("leadCaptureFields", newFields.join(","));
+                                      }}
+                                      className="rounded"
+                                      data-testid={`checkbox-lead-${field.id}`}
+                                    />
+                                    <span className="text-sm">{field.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="responses" className="mt-4 space-y-4">
+                  {!isNew && chatbotId && (
+                    <PredefinedResponses chatbotId={chatbotId} />
+                  )}
+                  {isNew && (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center text-muted-foreground">
+                          <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                          <p>Guarda el chatbot primero para configurar respuestas predefinidas</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </TabsContent>
+
                 <TabsContent value="voice" className="mt-4 space-y-4">
                   <Card>
                     <CardHeader>
@@ -845,6 +960,8 @@ export default function ChatbotEditor() {
                     isActive: watchedValues.isActive ?? true,
                     avatarImage: watchedValues.avatarImage || null,
                     elevenLabsAgentId: watchedValues.elevenLabsAgentId || null,
+                    requireLeadCapture: watchedValues.requireLeadCapture ?? false,
+                    leadCaptureFields: watchedValues.leadCaptureFields || "name,email",
                     userId: chatbot?.userId || null,
                     createdAt: new Date(),
                   }}

@@ -31,6 +31,9 @@ export const chatbots = pgTable("chatbots", {
   isActive: boolean("is_active").default(true),
   // ElevenLabs voice settings (per chatbot)
   elevenLabsAgentId: text("elevenlabs_agent_id"),
+  // Lead capture form settings
+  requireLeadCapture: boolean("require_lead_capture").default(false),
+  leadCaptureFields: text("lead_capture_fields").default("name,email"), // comma-separated: name,email,phone,company
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -67,6 +70,11 @@ export const widgetConversations = pgTable("widget_conversations", {
   id: serial("id").primaryKey(),
   chatbotId: integer("chatbot_id").references(() => chatbots.id, { onDelete: "cascade" }),
   sessionId: text("session_id").notNull(),
+  // Lead capture info
+  visitorName: text("visitor_name"),
+  visitorEmail: text("visitor_email"),
+  visitorPhone: text("visitor_phone"),
+  visitorCompany: text("visitor_company"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -123,3 +131,43 @@ export const chatbotAnalytics = pgTable("chatbot_analytics", {
 });
 
 export type ChatbotAnalytics = typeof chatbotAnalytics.$inferSelect;
+
+// Predefined responses (quick replies)
+export const predefinedResponses = pgTable("predefined_responses", {
+  id: serial("id").primaryKey(),
+  chatbotId: integer("chatbot_id").references(() => chatbots.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  category: text("category"), // optional category for grouping
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertPredefinedResponseSchema = createInsertSchema(predefinedResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPredefinedResponse = z.infer<typeof insertPredefinedResponseSchema>;
+export type PredefinedResponse = typeof predefinedResponses.$inferSelect;
+
+// Notifications/Alerts
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  type: text("type").notNull(), // low_satisfaction, no_response, high_volume
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  chatbotId: integer("chatbot_id").references(() => chatbots.id, { onDelete: "cascade" }),
+  conversationId: integer("conversation_id").references(() => widgetConversations.id, { onDelete: "cascade" }),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;

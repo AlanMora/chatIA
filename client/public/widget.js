@@ -352,6 +352,63 @@
         border-radius: 0;
       }
     }
+    .chatbot-widget-lead-form {
+      padding: 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .chatbot-widget-lead-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .chatbot-widget-lead-desc {
+      font-size: 14px;
+      color: #64748b;
+      margin-bottom: 20px;
+    }
+    .chatbot-widget-lead-field {
+      margin-bottom: 12px;
+    }
+    .chatbot-widget-lead-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .chatbot-widget-lead-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+    }
+    .chatbot-widget-lead-input:focus {
+      outline: none;
+      border-color: var(--primary-color, #3B82F6);
+    }
+    .chatbot-widget-lead-submit {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.2s;
+    }
+    .chatbot-widget-lead-submit:hover {
+      opacity: 0.9;
+    }
+    .chatbot-widget-lead-submit:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   `;
   document.head.appendChild(styles);
   
@@ -366,6 +423,7 @@
   
   let config = null;
   let voiceConfig = null;
+  let leadConfig = null;
   let messages = [];
   let isOpen = false;
   let isLoading = false;
@@ -377,6 +435,9 @@
   let hasRated = false;
   let showRating = false;
   let lastUserMessage = '';
+  let showLeadForm = false;
+  let leadSubmitted = localStorage.getItem('chatbot-lead-' + chatbotId) === 'true';
+  let visitorData = JSON.parse(localStorage.getItem('chatbot-visitor-' + chatbotId) || '{}');
   let sessionId = localStorage.getItem('chatbot-session-' + chatbotId) || generateId();
   localStorage.setItem('chatbot-session-' + chatbotId, sessionId);
   
@@ -401,6 +462,20 @@
           agentId: config.elevenLabsAgentId,
           enabled: true,
         };
+      }
+      
+      // Fetch lead capture config
+      try {
+        const leadResponse = await fetch(baseUrl + '/api/widget/' + chatbotId + '/lead-config');
+        if (leadResponse.ok) {
+          leadConfig = await leadResponse.json();
+          // Show lead form if required and not already submitted
+          if (leadConfig.requireLeadCapture && !leadSubmitted) {
+            showLeadForm = true;
+          }
+        }
+      } catch (e) {
+        console.log('Lead capture not configured');
       }
       
       render();
@@ -449,29 +524,57 @@
             ${iconClose}
           </button>
         </div>
-        <div class="chatbot-widget-messages" id="chatbot-messages">
-          ${messages.map(m => `
-            <div class="chatbot-widget-message ${m.role === 'user' ? 'user' : 'bot'}">
-              <div class="chatbot-widget-message-avatar" style="${m.role === 'user' ? 'background: #e2e8f0; color: #64748b;' : 'background: ' + (config.primaryColor || '#3B82F6') + '; color: ' + (config.textColor || '#fff') + ';'}">
-                ${m.role === 'user' ? iconUser : iconBot}
+        ${showLeadForm ? `
+          <div class="chatbot-widget-lead-form" id="chatbot-lead-form">
+            <div class="chatbot-widget-lead-title">Antes de comenzar</div>
+            <div class="chatbot-widget-lead-desc">Por favor, comparte tus datos para brindarte una mejor atención.</div>
+            ${(typeof leadConfig?.leadCaptureFields === 'string' 
+              ? leadConfig.leadCaptureFields.split(',').map(s => s.trim()).filter(s => s) 
+              : (leadConfig?.leadCaptureFields || ['name', 'email'])).map(field => {
+              const labels = { name: 'Nombre', email: 'Email', phone: 'Teléfono', company: 'Empresa' };
+              const types = { name: 'text', email: 'email', phone: 'tel', company: 'text' };
+              const placeholders = { name: 'Tu nombre', email: 'tu@email.com', phone: '+1 234 567 890', company: 'Tu empresa' };
+              return `
+                <div class="chatbot-widget-lead-field">
+                  <label class="chatbot-widget-lead-label">${labels[field] || field}</label>
+                  <input type="${types[field] || 'text'}" 
+                    class="chatbot-widget-lead-input" 
+                    id="chatbot-lead-${field}"
+                    placeholder="${placeholders[field] || ''}"
+                    value="${visitorData[field] || ''}"
+                    style="--primary-color: ${config.primaryColor || '#3B82F6'}">
+                </div>
+              `;
+            }).join('')}
+            <button class="chatbot-widget-lead-submit" id="chatbot-lead-submit" 
+              style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};">
+              Comenzar Chat
+            </button>
+          </div>
+        ` : `
+          <div class="chatbot-widget-messages" id="chatbot-messages">
+            ${messages.map(m => `
+              <div class="chatbot-widget-message ${m.role === 'user' ? 'user' : 'bot'}">
+                <div class="chatbot-widget-message-avatar" style="${m.role === 'user' ? 'background: #e2e8f0; color: #64748b;' : 'background: ' + (config.primaryColor || '#3B82F6') + '; color: ' + (config.textColor || '#fff') + ';'}">
+                  ${m.role === 'user' ? iconUser : iconBot}
+                </div>
+                <div class="chatbot-widget-message-bubble" style="${m.role === 'user' ? 'background: ' + (config.primaryColor || '#3B82F6') + '; color: ' + (config.textColor || '#fff') + ';' : ''}">
+                  ${escapeHtml(m.content)}
+                </div>
               </div>
-              <div class="chatbot-widget-message-bubble" style="${m.role === 'user' ? 'background: ' + (config.primaryColor || '#3B82F6') + '; color: ' + (config.textColor || '#fff') + ';' : ''}">
-                ${escapeHtml(m.content)}
+            `).join('')}
+            ${isLoading ? `
+              <div class="chatbot-widget-message bot">
+                <div class="chatbot-widget-message-avatar" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};">
+                  ${iconBot}
+                </div>
+                <div class="chatbot-widget-typing">
+                  <span></span><span></span><span></span>
+                </div>
               </div>
-            </div>
-          `).join('')}
-          ${isLoading ? `
-            <div class="chatbot-widget-message bot">
-              <div class="chatbot-widget-message-avatar" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};">
-                ${iconBot}
-              </div>
-              <div class="chatbot-widget-typing">
-                <span></span><span></span><span></span>
-              </div>
-            </div>
-          ` : ''}
-        </div>
-        <div class="chatbot-widget-input-area">
+            ` : ''}
+          </div>
+          <div class="chatbot-widget-input-area">
           <input type="text" class="chatbot-widget-input" id="chatbot-input" placeholder="Type a message..." ${isLoading ? 'disabled' : ''}>
           ${voiceConfig && voiceConfig.enabled ? (
             isVoiceActive ? `
@@ -494,6 +597,7 @@
             ${iconSend}
           </button>
         </div>
+        `}
         ${hasError ? `
           <div class="chatbot-widget-error">
             ${errorMessage}
@@ -525,6 +629,58 @@
       isOpen = false;
       render();
     };
+    
+    // Lead form submission
+    const leadSubmitBtn = document.getElementById('chatbot-lead-submit');
+    if (leadSubmitBtn) {
+      leadSubmitBtn.onclick = async function() {
+        const rawFields = leadConfig?.leadCaptureFields || 'name,email';
+        const fields = typeof rawFields === 'string' 
+          ? rawFields.split(',').map(s => s.trim()).filter(s => s)
+          : rawFields;
+        const data = {};
+        let isValid = true;
+        
+        fields.forEach(function(field) {
+          const input = document.getElementById('chatbot-lead-' + field);
+          if (input) {
+            data[field] = input.value.trim();
+            // Name and email are required when present in fields
+            if (!data[field] && (field === 'name' || field === 'email') && fields.includes(field)) {
+              isValid = false;
+            }
+          }
+        });
+        
+        if (!isValid) {
+          return;
+        }
+        
+        visitorData = data;
+        localStorage.setItem('chatbot-visitor-' + chatbotId, JSON.stringify(data));
+        localStorage.setItem('chatbot-lead-' + chatbotId, 'true');
+        leadSubmitted = true;
+        showLeadForm = false;
+        
+        // Send visitor info to server
+        try {
+          await fetch(baseUrl + '/api/widget/' + chatbotId + '/conversation/' + sessionId + '/visitor', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              visitorName: data.name || null,
+              visitorEmail: data.email || null,
+              visitorPhone: data.phone || null,
+              visitorCompany: data.company || null,
+            }),
+          });
+        } catch (e) {
+          console.log('Failed to save visitor info');
+        }
+        
+        render();
+      };
+    }
     
     const input = document.getElementById('chatbot-input');
     const sendBtn = document.getElementById('chatbot-send');
@@ -579,7 +735,9 @@
     }
     
     const messagesContainer = document.getElementById('chatbot-messages');
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
   }
   
   async function startVoiceConversation() {
