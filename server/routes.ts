@@ -276,7 +276,7 @@ export async function registerRoutes(
 
       // Extract content based on file type
       if (file.mimetype === 'application/pdf') {
-        const pdfModule = await import("pdf-parse");
+        const pdfModule = await import("pdf-parse") as any;
         const pdfParse = pdfModule.default || pdfModule;
         const pdfData = await pdfParse(file.buffer);
         content = pdfData.text;
@@ -702,9 +702,23 @@ export async function registerRoutes(
       
       // Get knowledge base context
       const knowledgeItems = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
-      const knowledgeContext = knowledgeItems.length > 0
-        ? `\n\nKnowledge Base Context:\n${knowledgeItems.map(i => `${i.title}: ${i.content}`).join("\n\n")}`
-        : "";
+      console.log(`[Widget Chat] Chatbot ${chatbotId} has ${knowledgeItems.length} knowledge base items`);
+      
+      let knowledgeContext = "";
+      if (knowledgeItems.length > 0) {
+        const kbContent = knowledgeItems.map(i => `### ${i.title}\n${i.content}`).join("\n\n---\n\n");
+        knowledgeContext = `
+
+IMPORTANT INSTRUCTIONS:
+You MUST base your answers on the following knowledge base. Only use information from this knowledge base to answer questions. If the question cannot be answered using the knowledge base, politely say you don't have that information.
+
+=== KNOWLEDGE BASE START ===
+${kbContent}
+=== KNOWLEDGE BASE END ===
+
+Remember: Always prioritize information from the knowledge base above. Do not make up information that is not in the knowledge base.`;
+        console.log(`[Widget Chat] Knowledge context length: ${knowledgeContext.length} characters`);
+      }
 
       // Set up SSE
       res.setHeader("Content-Type", "text/event-stream");
@@ -758,11 +772,17 @@ export async function registerRoutes(
           parts: [{ text: m.content }],
         }));
 
+        // Add system prompt as first user message for Gemini
+        const fullContents = [
+          { role: "user" as const, parts: [{ text: `System instructions: ${systemPrompt}` }] },
+          { role: "model" as const, parts: [{ text: "Understood. I will follow these instructions." }] },
+          ...geminiMessages,
+        ];
+        
         // Stream response from Gemini
         const stream = await gemini.models.generateContentStream({
           model: aiModel,
-          contents: geminiMessages,
-          systemInstruction: systemPrompt,
+          contents: fullContents,
           config: {
             maxOutputTokens: chatbot.maxTokens || 1024,
           },

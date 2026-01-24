@@ -467,7 +467,7 @@ export class DatabaseStorage implements IStorage {
     if (filteredConvIds.length === 0) return null;
     
     const allRatings = await db.select().from(conversationRatings);
-    const filteredRatings = allRatings.filter(r => filteredConvIds.includes(r.conversationId));
+    const filteredRatings = allRatings.filter(r => r.conversationId !== null && filteredConvIds.includes(r.conversationId));
     
     if (filteredRatings.length === 0) return null;
     
