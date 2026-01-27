@@ -117,7 +117,7 @@ function AppContent() {
   }
 
   if (!user) {
-    return <Landing />;
+    return <AuthPage />;
   }
 
   return <AuthenticatedApp />;

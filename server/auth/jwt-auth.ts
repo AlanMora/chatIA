@@ -7,7 +7,11 @@ import { db } from "../db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("JWT_SECRET environment variable is required in production");
+}
+const SECRET = JWT_SECRET || "dev-only-secret-not-for-production";
 const JWT_EXPIRES_IN = "7d";
 
 export interface JWTUser {
@@ -34,16 +38,9 @@ declare module "express-session" {
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000;
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
-  return session({
-    secret: process.env.SESSION_SECRET || JWT_SECRET,
-    store: sessionStore,
+  
+  const sessionConfig: session.SessionOptions = {
+    secret: process.env.SESSION_SECRET || SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -51,7 +48,19 @@ export function getSession() {
       secure: process.env.NODE_ENV === "production",
       maxAge: sessionTtl,
     },
-  });
+  };
+
+  if (process.env.DATABASE_URL) {
+    const pgStore = connectPg(session);
+    sessionConfig.store = new pgStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: true,
+      ttl: sessionTtl,
+      tableName: "sessions",
+    });
+  }
+  
+  return session(sessionConfig);
 }
 
 export async function setupJWTAuth(app: Express) {
@@ -62,14 +71,14 @@ export async function setupJWTAuth(app: Express) {
 export function generateToken(user: JWTUser): string {
   return jwt.sign(
     { sub: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName },
-    JWT_SECRET,
+    SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );
 }
 
 export function verifyToken(token: string): JWTUser | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, SECRET) as any;
     return {
       id: decoded.sub,
       email: decoded.email,
