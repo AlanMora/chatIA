@@ -791,10 +791,10 @@ RECUERDA: Si no est√° arriba, NO lo sabes. Responde que no tienes esa informaci√
           })),
         ];
 
-        // Create OpenRouter client using Replit AI Integrations
+        // Create OpenRouter client using user's API key
         const openrouterClient = new OpenAI({
-          apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY || "not-required",
-          baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL || "",
+          apiKey: process.env.OPENROUTER_API_KEY || "",
+          baseURL: "https://openrouter.ai/api/v1",
         });
 
         // Stream response from OpenRouter
