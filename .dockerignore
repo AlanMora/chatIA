@@ -6,3 +6,7 @@ npm-debug.log
 .vscode
 dist
 uploads
+.env
+.env.*
+!.env.example
+docker-compose.yml
