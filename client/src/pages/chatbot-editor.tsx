@@ -475,13 +475,19 @@ export default function ChatbotEditor() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">OpenAI</div>
+                                <div className="px-2 py-1.5 text-xs font-semibold text-green-600 dark:text-green-400">Modelos Gratuitos</div>
+                                {AI_MODELS.filter(m => m.provider === "openrouter").map((model) => (
+                                  <SelectItem key={model.value} value={model.value}>
+                                    {model.label}
+                                  </SelectItem>
+                                ))}
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">OpenAI (Premium)</div>
                                 {AI_MODELS.filter(m => m.provider === "openai").map((model) => (
                                   <SelectItem key={model.value} value={model.value}>
                                     {model.label}
                                   </SelectItem>
                                 ))}
-                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Google Gemini</div>
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Google Gemini (Premium)</div>
                                 {AI_MODELS.filter(m => m.provider === "gemini").map((model) => (
                                   <SelectItem key={model.value} value={model.value}>
                                     {model.label}
