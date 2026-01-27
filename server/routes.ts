@@ -8,7 +8,7 @@ import multer from "multer";
 import mammoth from "mammoth";
 import * as cheerio from "cheerio";
 import { registerElevenLabsRoutes } from "./elevenlabs";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 
 import path from "path";
 import fs from "fs";

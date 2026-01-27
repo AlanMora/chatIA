@@ -22,10 +22,10 @@ export default function Landing() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <Button size="lg" className="w-full" asChild data-testid="button-login">
-            <a href="/api/login">Iniciar Sesión</a>
+            <a href="/auth">Iniciar Sesión</a>
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            Accede con Google, GitHub, Apple o email
+            Crea una cuenta o inicia sesión con tu correo
           </p>
         </CardContent>
       </Card>

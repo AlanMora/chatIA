@@ -25,11 +25,13 @@ import ChatbotPreview from "@/pages/chatbot-preview";
 import ChatbotTest from "@/pages/chatbot-test";
 import Landing from "@/pages/landing";
 import ElevenLabsPage from "@/pages/elevenlabs";
+import AuthPage from "@/pages/auth";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/auth" component={AuthPage} />
       <Route path="/chatbots" component={Chatbots} />
       <Route path="/chatbots/:id/preview" component={ChatbotPreview} />
       <Route path="/chatbots/:id/test" component={ChatbotTest} />
@@ -79,11 +81,16 @@ function AuthenticatedApp() {
                     <User className="h-4 w-4" />
                     <span>{user?.email || "Usuario"}</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild data-testid="button-logout">
-                    <a href="/api/logout" className="flex items-center gap-2 text-destructive">
-                      <LogOut className="h-4 w-4" />
-                      <span>Cerrar Sesión</span>
-                    </a>
+                  <DropdownMenuItem 
+                    data-testid="button-logout"
+                    className="flex items-center gap-2 text-destructive cursor-pointer"
+                    onClick={() => {
+                      localStorage.removeItem("authToken");
+                      window.location.href = "/api/logout";
+                    }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Cerrar Sesión</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
