@@ -752,14 +752,19 @@ export async function registerRoutes(
         const kbContent = knowledgeItems.map(i => `### ${i.title}\n${i.content}`).join("\n\n---\n\n");
         knowledgeContext = `
 
-IMPORTANT INSTRUCTIONS:
-You MUST base your answers on the following knowledge base. Only use information from this knowledge base to answer questions. If the question cannot be answered using the knowledge base, politely say you don't have that information.
+=== INSTRUCCIONES CRÍTICAS - DEBES SEGUIRLAS SIEMPRE ===
 
-=== KNOWLEDGE BASE START ===
+1. SOLO puedes responder usando la información de la BASE DE CONOCIMIENTO que aparece abajo.
+2. Si la pregunta NO puede ser respondida con la información de la base de conocimiento, DEBES responder EXACTAMENTE: "Lo siento, no tengo información sobre eso en mi base de conocimiento. Solo puedo ayudarte con los temas que tengo documentados."
+3. NUNCA inventes, supongas o uses información externa que no esté en la base de conocimiento.
+4. Si el usuario insiste en un tema que no está en tu base de conocimiento, repite amablemente que no puedes ayudar con eso.
+5. Sé amable y profesional, pero firme en no dar información que no tengas.
+
+=== BASE DE CONOCIMIENTO - ESTA ES TU ÚNICA FUENTE DE INFORMACIÓN ===
 ${kbContent}
-=== KNOWLEDGE BASE END ===
+=== FIN DE BASE DE CONOCIMIENTO ===
 
-Remember: Always prioritize information from the knowledge base above. Do not make up information that is not in the knowledge base.`;
+RECUERDA: Si no está arriba, NO lo sabes. Responde que no tienes esa información.`;
         console.log(`[Widget Chat] Knowledge context length: ${knowledgeContext.length} characters`);
       }
 
