@@ -778,7 +778,41 @@ RECUERDA: Si no estÃ¡ arriba, NO lo sabes. Responde que no tienes esa informaciÃ
       const aiModel = chatbot.aiModel || "gpt-5";
       const startTime = Date.now();
 
-      if (aiProvider === "custom") {
+      if (aiProvider === "openrouter") {
+        // Build OpenAI-compatible messages for OpenRouter (free models)
+        const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+          {
+            role: "system",
+            content: (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext,
+          },
+          ...messages.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+        ];
+
+        // Create OpenRouter client using Replit AI Integrations
+        const openrouterClient = new OpenAI({
+          apiKey: process.env.AI_INTEGRATIONS_OPENROUTER_API_KEY || "not-required",
+          baseURL: process.env.AI_INTEGRATIONS_OPENROUTER_BASE_URL || "",
+        });
+
+        // Stream response from OpenRouter
+        const stream = await openrouterClient.chat.completions.create({
+          model: aiModel,
+          messages: chatMessages,
+          stream: true,
+          max_tokens: chatbot.maxTokens || 1024,
+        });
+
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || "";
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        }
+      } else if (aiProvider === "custom") {
         // Build OpenAI-compatible messages for custom endpoint
         const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
           {

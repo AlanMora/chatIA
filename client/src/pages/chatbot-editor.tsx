@@ -61,14 +61,24 @@ const chatbotFormSchema = z.object({
 type ChatbotFormValues = z.infer<typeof chatbotFormSchema>;
 
 const AI_MODELS = [
-  { value: "gpt-5", label: "GPT-5 (Último)", provider: "openai" },
+  // Modelos GRATUITOS (OpenRouter)
+  { value: "deepseek/deepseek-r1-0528:free", label: "DeepSeek R1 (Gratis)", provider: "openrouter" },
+  { value: "qwen/qwen3-coder:free", label: "Qwen 3 Coder (Gratis)", provider: "openrouter" },
+  { value: "moonshotai/kimi-k2:free", label: "Kimi K2 (Gratis)", provider: "openrouter" },
+  { value: "google/gemma-3n-e4b-it:free", label: "Gemma 3N E4B (Gratis)", provider: "openrouter" },
+  { value: "nvidia/nemotron-nano-9b-v2:free", label: "Nemotron Nano 9B (Gratis)", provider: "openrouter" },
+  { value: "openai/gpt-oss-20b:free", label: "GPT OSS 20B (Gratis)", provider: "openrouter" },
+  // OpenAI (Premium)
+  { value: "gpt-5", label: "GPT-5 (Premium)", provider: "openai" },
   { value: "gpt-5.1", label: "GPT-5.1", provider: "openai" },
   { value: "gpt-4o", label: "GPT-4o", provider: "openai" },
   { value: "gpt-4o-mini", label: "GPT-4o Mini (Rápido)", provider: "openai" },
-  { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (Último)", provider: "gemini" },
+  // Gemini (Premium)
+  { value: "gemini-3-pro-preview", label: "Gemini 3 Pro", provider: "gemini" },
   { value: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "gemini" },
   { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "gemini" },
   { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Rápido)", provider: "gemini" },
+  // Personalizado
   { value: "custom", label: "Modelo Personalizado (Self-Hosted)", provider: "custom" },
 ];
 
