@@ -16,13 +16,9 @@ FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy package files
+# Copy package files and install ALL dependencies (need drizzle-kit for migrations)
 COPY package.json package-lock.json ./
-
-# Install production deps + drizzle-kit for migrations
-RUN npm ci --omit=dev && \
-    npm install drizzle-kit && \
-    npm cache clean --force
+RUN npm ci && npm cache clean --force
 
 # Copy built application
 COPY --from=build /app/dist ./dist
@@ -30,7 +26,6 @@ COPY --from=build /app/dist ./dist
 # Copy files needed for drizzle migrations
 COPY --from=build /app/drizzle.config.ts ./
 COPY --from=build /app/shared ./shared
-COPY --from=build /app/node_modules/drizzle-kit ./node_modules/drizzle-kit
 
 # Create uploads directory
 RUN mkdir -p /app/uploads && chown -R node:node /app
