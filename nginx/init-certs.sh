@@ -5,6 +5,12 @@
 DOMAIN="sofia.omnios.mx"
 CERT_PATH="/etc/letsencrypt/live/$DOMAIN"
 
+# Instalar openssl si no existe
+if ! command -v openssl > /dev/null 2>&1; then
+    echo "Instalando openssl..."
+    apk add --no-cache openssl
+fi
+
 # Crear directorios si no existen
 mkdir -p "$CERT_PATH"
 
