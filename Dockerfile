@@ -1,35 +1,40 @@
 FROM node:20-slim AS build
+
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+# Instalar dependencias del sistema necesarias para compilacion nativa
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install all dependencies (including dev for build)
 COPY package.json package-lock.json ./
+
 RUN npm ci
 
-# Copy source and build
 COPY . .
 RUN npm run build
 
-FROM node:20-slim AS runner
+FROM node:20-slim AS runtime
+
 WORKDIR /app
+
 ENV NODE_ENV=production
 
-# Copy package files and install ALL dependencies (need drizzle-kit for migrations)
+# Copiar package files
 COPY package.json package-lock.json ./
-RUN npm ci && npm cache clean --force
 
-# Copy built application
+# Copiar node_modules completos desde el build stage (incluye drizzle-kit)
+COPY --from=build /app/node_modules ./node_modules
+
+# Copiar archivos de la aplicacion
 COPY --from=build /app/dist ./dist
-
-# Copy files needed for drizzle migrations
-COPY --from=build /app/drizzle.config.ts ./
 COPY --from=build /app/shared ./shared
+COPY --from=build /app/drizzle.config.ts ./
 
-# Create uploads directory
-RUN mkdir -p /app/uploads && chown -R node:node /app
+RUN mkdir -p /app/uploads
 
-USER node
 EXPOSE 5000
-CMD ["node", "dist/index.cjs"]
+
+CMD ["npm", "start"]
