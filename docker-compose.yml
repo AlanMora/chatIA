@@ -41,6 +41,7 @@ services:
       - "${PORT:-5000}"
     volumes:
       - uploads:/app/uploads
+    command: sh -c "./node_modules/.bin/drizzle-kit push && npm start"
 
   nginx:
     image: nginx:alpine
