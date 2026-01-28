@@ -54,10 +54,12 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - certbot-etc:/etc/letsencrypt:ro
+      - ./nginx/init-certs.sh:/init-certs.sh:ro
+      - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
-      - certbot-webroot:/var/www/certbot:ro
+      - certbot-webroot:/var/www/certbot
       - uploads:/app/uploads:ro
+    command: ["/bin/sh", "/init-certs.sh"]
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
