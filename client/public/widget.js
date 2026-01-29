@@ -429,6 +429,7 @@
   let isLoading = false;
   let isVoiceActive = false;
   let isVoiceConnecting = false;
+  let isSpeaking = false;
   let conversation = null;
   let hasError = false;
   let errorMessage = '';
@@ -578,15 +579,15 @@
           <input type="text" class="chatbot-widget-input" id="chatbot-input" placeholder="Type a message..." ${isLoading ? 'disabled' : ''}>
           ${voiceConfig && voiceConfig.enabled ? (
             isVoiceActive ? `
-              <div class="chatbot-widget-voice-status">
-                <span class="dot"></span>
-                Escuchando...
+              <div class="chatbot-widget-voice-status" style="background: ${isSpeaking ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)'}; color: ${isSpeaking ? '#22c55e' : '#3b82f6'};">
+                <span class="dot" style="background: ${isSpeaking ? '#22c55e' : '#3b82f6'};"></span>
+                ${isSpeaking ? 'Hablando...' : 'Escuchando...'}
               </div>
               <button class="chatbot-widget-voice-end" id="chatbot-voice-end" title="Terminar llamada">
                 ${iconPhoneOff}
               </button>
             ` : `
-              <button class="chatbot-widget-voice ${isVoiceConnecting ? 'connecting' : ''}" id="chatbot-voice" 
+              <button class="chatbot-widget-voice ${isVoiceConnecting ? 'connecting' : ''}" id="chatbot-voice"
                 style="border-color: ${config.primaryColor || '#3B82F6'}; color: ${config.primaryColor || '#3B82F6'};"
                 title="Iniciar conversación por voz" ${isVoiceConnecting ? 'disabled' : ''}>
                 ${iconMic}
@@ -768,6 +769,7 @@
           onDisconnect: function() {
             isVoiceActive = false;
             isVoiceConnecting = false;
+            isSpeaking = false;
             conversation = null;
             render();
           },
@@ -782,7 +784,12 @@
             console.error('ElevenLabs error:', err);
             isVoiceActive = false;
             isVoiceConnecting = false;
+            isSpeaking = false;
             conversation = null;
+            render();
+          },
+          onModeChange: function(mode) {
+            isSpeaking = mode.mode === 'speaking';
             render();
           }
         });
@@ -846,6 +853,7 @@
       conversation = null;
     }
     isVoiceActive = false;
+    isSpeaking = false;
     render();
   }
   
