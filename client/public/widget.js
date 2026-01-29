@@ -181,6 +181,8 @@
       border-top: 1px solid #e2e8f0;
       display: flex;
       gap: 8px;
+      align-items: center;
+      overflow: hidden;
     }
     .chatbot-widget-input {
       flex: 1;
@@ -197,6 +199,7 @@
     .chatbot-widget-send {
       width: 40px;
       height: 40px;
+      min-width: 40px;
       border-radius: 50%;
       border: none;
       cursor: pointer;
@@ -204,6 +207,7 @@
       align-items: center;
       justify-content: center;
       transition: transform 0.2s;
+      flex-shrink: 0;
     }
     .chatbot-widget-send:hover {
       transform: scale(1.05);
@@ -219,6 +223,7 @@
     .chatbot-widget-voice {
       width: 40px;
       height: 40px;
+      min-width: 40px;
       border-radius: 50%;
       border: 2px solid;
       background: transparent;
@@ -227,6 +232,7 @@
       align-items: center;
       justify-content: center;
       transition: transform 0.2s, background 0.2s;
+      flex-shrink: 0;
     }
     .chatbot-widget-voice:hover {
       transform: scale(1.05);
@@ -248,12 +254,15 @@
     .chatbot-widget-voice-status {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
       padding: 4px 10px;
       border-radius: 16px;
       font-size: 12px;
       background: rgba(34, 197, 94, 0.1);
       color: #22c55e;
+      flex: 1;
+      min-width: 0;
     }
     .chatbot-widget-voice-status .dot {
       width: 6px;
@@ -265,6 +274,7 @@
     .chatbot-widget-voice-end {
       width: 40px;
       height: 40px;
+      min-width: 40px;
       border-radius: 50%;
       border: none;
       background: #ef4444;
@@ -273,6 +283,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
     }
     .chatbot-widget-voice-end:hover {
       background: #dc2626;
@@ -576,7 +587,7 @@
             ` : ''}
           </div>
           <div class="chatbot-widget-input-area">
-          <input type="text" class="chatbot-widget-input" id="chatbot-input" placeholder="Type a message..." ${isLoading ? 'disabled' : ''}>
+          ${isVoiceActive ? '' : `<input type="text" class="chatbot-widget-input" id="chatbot-input" placeholder="Type a message..." ${isLoading ? 'disabled' : ''}>`}
           ${voiceConfig && voiceConfig.enabled ? (
             isVoiceActive ? `
               <div class="chatbot-widget-voice-status" style="background: ${isSpeaking ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)'}; color: ${isSpeaking ? '#22c55e' : '#3b82f6'};">
@@ -594,7 +605,7 @@
               </button>
             `
           ) : ''}
-          <button class="chatbot-widget-send" id="chatbot-send" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};" ${isLoading ? 'disabled' : ''}>
+          <button class="chatbot-widget-send" id="chatbot-send" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};" ${isLoading || isVoiceActive ? 'disabled' : ''}>
             ${iconSend}
           </button>
         </div>
@@ -685,17 +696,22 @@
     
     const input = document.getElementById('chatbot-input');
     const sendBtn = document.getElementById('chatbot-send');
-    
+
     function handleSend() {
+      if (!input) return;
       const text = input.value.trim();
       if (!text || isLoading) return;
       sendMessage(text);
     }
-    
-    sendBtn.onclick = handleSend;
-    input.onkeypress = function(e) {
-      if (e.key === 'Enter') handleSend();
-    };
+
+    if (sendBtn) {
+      sendBtn.onclick = handleSend;
+    }
+    if (input) {
+      input.onkeypress = function(e) {
+        if (e.key === 'Enter') handleSend();
+      };
+    }
     
     const voiceBtn = document.getElementById('chatbot-voice');
     if (voiceBtn) {
