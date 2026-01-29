@@ -740,62 +740,92 @@
     }
   }
   
+  // ElevenLabs SDK state
+  let ElevenLabsConversation = null;
+
   async function startVoiceConversation() {
     if (!voiceConfig || !voiceConfig.agentId || isVoiceConnecting) return;
-    
+
     try {
       isVoiceConnecting = true;
       render();
-      
+
+      // Request microphone permission
       await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Use the chatbot-specific voice endpoint
-      const signedUrlResponse = await fetch(baseUrl + '/api/widget/' + chatbotId + '/voice/signed-url');
-      if (!signedUrlResponse.ok) {
-        throw new Error('No se pudo obtener conexión de voz');
-      }
-      const data = await signedUrlResponse.json();
-      
-      if (!data.signed_url) {
-        throw new Error('URL de voz no disponible');
-      }
-      
-      conversation = new WebSocket(data.signed_url);
-      
-      conversation.onopen = function() {
-        isVoiceConnecting = false;
-        isVoiceActive = true;
-        render();
-      };
-      
-      conversation.onclose = function() {
-        isVoiceActive = false;
-        isVoiceConnecting = false;
-        conversation = null;
-        render();
-      };
-      
-      conversation.onmessage = function(event) {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'agent_response' && msg.agent_response_event?.agent_response) {
-            messages.push({ role: 'assistant', content: msg.agent_response_event.agent_response });
+
+      // Try to load and use ElevenLabs SDK via esm.sh CDN
+      try {
+        const module = await import('https://esm.sh/@elevenlabs/client@latest');
+        ElevenLabsConversation = module.Conversation;
+
+        conversation = await ElevenLabsConversation.startSession({
+          agentId: voiceConfig.agentId,
+          onConnect: function() {
+            isVoiceConnecting = false;
+            isVoiceActive = true;
             render();
-          } else if (msg.type === 'user_transcript' && msg.user_transcription_event?.user_transcript) {
-            messages.push({ role: 'user', content: msg.user_transcription_event.user_transcript });
+          },
+          onDisconnect: function() {
+            isVoiceActive = false;
+            isVoiceConnecting = false;
+            conversation = null;
+            render();
+          },
+          onMessage: function(message) {
+            if (message.message) {
+              const role = message.source === 'user' ? 'user' : 'assistant';
+              messages.push({ role: role, content: message.message });
+              render();
+            }
+          },
+          onError: function(err) {
+            console.error('ElevenLabs error:', err);
+            isVoiceActive = false;
+            isVoiceConnecting = false;
+            conversation = null;
             render();
           }
-        } catch (e) {}
-      };
-      
-      conversation.onerror = function(err) {
-        console.error('Voice error:', err);
-        isVoiceActive = false;
-        isVoiceConnecting = false;
-        conversation = null;
-        render();
-      };
-      
+        });
+      } catch (sdkError) {
+        console.error('ElevenLabs SDK failed, trying WebSocket fallback:', sdkError);
+
+        // Fallback to signed URL WebSocket approach
+        const signedUrlResponse = await fetch(baseUrl + '/api/widget/' + chatbotId + '/voice/signed-url');
+        if (!signedUrlResponse.ok) {
+          throw new Error('No se pudo obtener conexión de voz');
+        }
+        const data = await signedUrlResponse.json();
+
+        if (!data.signed_url) {
+          throw new Error('URL de voz no disponible');
+        }
+
+        // Note: WebSocket fallback won't have full audio functionality
+        // User should use the SDK approach for full voice features
+        conversation = new WebSocket(data.signed_url);
+
+        conversation.onopen = function() {
+          isVoiceConnecting = false;
+          isVoiceActive = true;
+          render();
+        };
+
+        conversation.onclose = function() {
+          isVoiceActive = false;
+          isVoiceConnecting = false;
+          conversation = null;
+          render();
+        };
+
+        conversation.onerror = function(err) {
+          console.error('Voice WebSocket error:', err);
+          isVoiceActive = false;
+          isVoiceConnecting = false;
+          conversation = null;
+          render();
+        };
+      }
+
     } catch (error) {
       console.error('Failed to start voice:', error);
       alert('Error al iniciar voz: ' + error.message);
@@ -804,10 +834,15 @@
       render();
     }
   }
-  
+
   async function endVoiceConversation() {
     if (conversation) {
-      conversation.close();
+      // Check if it's ElevenLabs SDK conversation or WebSocket
+      if (typeof conversation.endSession === 'function') {
+        await conversation.endSession();
+      } else if (typeof conversation.close === 'function') {
+        conversation.close();
+      }
       conversation = null;
     }
     isVoiceActive = false;
