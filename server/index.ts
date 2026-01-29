@@ -2,9 +2,17 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import cors from "cors";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Enable CORS for widget endpoints (allows embedding on any website)
+app.use("/api/widget", cors({
+  origin: "*",
+  methods: ["GET", "POST", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+}));
 
 declare module "http" {
   interface IncomingMessage {
