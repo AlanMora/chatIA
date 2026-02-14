@@ -278,6 +278,7 @@ export default function ChatbotPreview() {
                 data-testid="input-preview-message"
               />
               <VoiceChat
+                agentId={chatbot.elevenLabsAgentId}
                 primaryColor={chatbot.primaryColor || "#3B82F6"}
                 textColor={chatbot.textColor || "#FFFFFF"}
                 onTranscript={(role, text) => {

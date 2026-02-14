@@ -8,11 +8,12 @@ interface VoiceChatProps {
   primaryColor?: string;
   textColor?: string;
   className?: string;
+  agentId?: string | null;
 }
 
 type ConversationStatus = "idle" | "connecting" | "connected";
 
-export function VoiceChat({ onTranscript, primaryColor, textColor, className }: VoiceChatProps) {
+export function VoiceChat({ onTranscript, primaryColor, textColor, className, agentId: propAgentId }: VoiceChatProps) {
   const [isEnabled, setIsEnabled] = useState(false);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,14 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className }: 
   const conversationRef = useRef<any>(null);
 
   useEffect(() => {
+    // If a specific agent ID is provided via props, use it directly
+    if (propAgentId) {
+      setAgentId(propAgentId);
+      setIsEnabled(true);
+      return;
+    }
+
+    // Otherwise fall back to global ElevenLabs config
     fetch("/api/elevenlabs/config")
       .then((res) => {
         if (!res.ok) return null;
@@ -35,7 +44,7 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className }: 
       .catch((err) => {
         console.error("Failed to fetch ElevenLabs config:", err);
       });
-  }, []);
+  }, [propAgentId]);
 
   const startConversation = useCallback(async () => {
     if (!agentId) {
