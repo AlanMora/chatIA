@@ -13,9 +13,9 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import path from "path";
 import fs from "fs";
 
-const uploadDocs = multer({ 
+const uploadDocs = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       'application/pdf',
@@ -26,7 +26,7 @@ const uploadDocs = multer({
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only PDF, DOC, DOCX, and TXT files are allowed.'));
+      cb(new Error('Tipo de archivo no válido. Solo se permiten PDF, DOC, DOCX y TXT.'));
     }
   }
 });
@@ -201,7 +201,7 @@ export async function registerRoutes(
   });
 
   // Create knowledge base item (with limit check)
-  const MAX_KB_ITEMS_PER_USER = 50;
+  const MAX_KB_ITEMS_PER_USER = 500;
   app.post("/api/knowledge-base", isAuthenticated, async (req: any, res) => {
     try {
       const parsed = insertKnowledgeBaseItemSchema.safeParse(req.body);
@@ -251,7 +251,28 @@ export async function registerRoutes(
     }
   });
 
-  // Upload file and extract content
+  // Helper function to extract content from a file buffer
+  async function extractFileContent(file: { mimetype: string; buffer: Buffer; originalname: string }): Promise<string> {
+    if (file.mimetype === 'application/pdf') {
+      const pdfModule = await import("pdf-parse") as any;
+      const pdfParse = pdfModule.default || pdfModule;
+      try {
+        const pdfData = await pdfParse(file.buffer);
+        return pdfData.text || "";
+      } catch (pdfError: any) {
+        throw new Error(`Error al leer el PDF "${file.originalname}": el archivo puede estar corrupto o protegido con contraseña.`);
+      }
+    } else if (file.mimetype === 'application/msword' ||
+               file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const result = await mammoth.extractRawText({ buffer: file.buffer });
+      return result.value || "";
+    } else if (file.mimetype === 'text/plain') {
+      return file.buffer.toString('utf-8');
+    }
+    return "";
+  }
+
+  // Upload single file and extract content
   app.post("/api/knowledge-base/upload", isAuthenticated, uploadDocs.single('file'), async (req: any, res) => {
     try {
       const file = req.file;
@@ -260,39 +281,31 @@ export async function registerRoutes(
       const userId = req.user?.claims?.sub;
 
       if (!file) {
-        return res.status(400).json({ error: "No file uploaded" });
+        return res.status(400).json({ error: "No se recibió ningún archivo. Selecciona un archivo para subir." });
       }
 
       if (!chatbotId) {
-        return res.status(400).json({ error: "chatbotId is required" });
+        return res.status(400).json({ error: "Se requiere seleccionar un chatbot." });
       }
 
       const chatbot = await storage.getChatbot(chatbotId);
       if (!chatbot || chatbot.userId !== userId) {
-        return res.status(403).json({ error: "Access denied" });
+        return res.status(403).json({ error: "No tienes acceso a este chatbot." });
       }
 
       let content = "";
-
-      // Extract content based on file type
-      if (file.mimetype === 'application/pdf') {
-        const pdfModule = await import("pdf-parse") as any;
-        const pdfParse = pdfModule.default || pdfModule;
-        const pdfData = await pdfParse(file.buffer);
-        content = pdfData.text;
-      } else if (file.mimetype === 'application/msword' || 
-                 file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        const result = await mammoth.extractRawText({ buffer: file.buffer });
-        content = result.value;
-      } else if (file.mimetype === 'text/plain') {
-        content = file.buffer.toString('utf-8');
+      try {
+        content = await extractFileContent(file);
+      } catch (extractError: any) {
+        return res.status(400).json({ error: extractError.message });
       }
 
       if (!content.trim()) {
-        return res.status(400).json({ error: "Could not extract content from file" });
+        return res.status(400).json({
+          error: `No se pudo extraer texto del archivo "${file.originalname}". Puede ser un PDF escaneado (imagen), estar vacío o estar protegido.`
+        });
       }
 
-      // Create knowledge base item
       const item = await storage.createKnowledgeBaseItem({
         chatbotId,
         title,
@@ -302,9 +315,81 @@ export async function registerRoutes(
       });
 
       res.status(201).json(item);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading file:", error);
-      res.status(500).json({ error: "Failed to process uploaded file" });
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: "El archivo es demasiado grande. El tamaño máximo es 50MB." });
+      }
+      res.status(500).json({ error: `Error al procesar el archivo: ${error.message || 'Error desconocido'}` });
+    }
+  });
+
+  // Upload multiple files (batch) and extract content
+  app.post("/api/knowledge-base/upload-batch", isAuthenticated, uploadDocs.array('files', 50), async (req: any, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      const chatbotId = parseInt(req.body.chatbotId);
+      const userId = req.user?.claims?.sub;
+
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No se recibieron archivos." });
+      }
+
+      if (!chatbotId) {
+        return res.status(400).json({ error: "Se requiere seleccionar un chatbot." });
+      }
+
+      const chatbot = await storage.getChatbot(chatbotId);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "No tienes acceso a este chatbot." });
+      }
+
+      const results: { filename: string; success: boolean; error?: string; item?: any }[] = [];
+
+      for (const file of files) {
+        try {
+          let content = await extractFileContent(file);
+
+          if (!content.trim()) {
+            results.push({
+              filename: file.originalname,
+              success: false,
+              error: `No se pudo extraer texto. Puede ser un PDF escaneado (imagen), estar vacío o protegido.`,
+            });
+            continue;
+          }
+
+          const item = await storage.createKnowledgeBaseItem({
+            chatbotId,
+            title: file.originalname,
+            content: content.trim(),
+            sourceType: "file",
+            sourceUrl: file.originalname,
+          });
+
+          results.push({ filename: file.originalname, success: true, item });
+        } catch (fileError: any) {
+          results.push({
+            filename: file.originalname,
+            success: false,
+            error: fileError.message || "Error desconocido al procesar el archivo.",
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      res.status(201).json({
+        message: `${successCount} archivo(s) subido(s) exitosamente${failCount > 0 ? `, ${failCount} con errores` : ''}.`,
+        total: files.length,
+        successCount,
+        failCount,
+        results,
+      });
+    } catch (error: any) {
+      console.error("Error in batch upload:", error);
+      res.status(500).json({ error: `Error en la subida por lotes: ${error.message || 'Error desconocido'}` });
     }
   });
 
@@ -860,9 +945,13 @@ RECUERDA: Si no está arriba, NO lo sabes. Responde que no tienes esa informaci�
           { role: "model" as const, parts: [{ text: "Understood. I will follow these instructions." }] },
           ...geminiMessages,
         ];
-        
+
+        // Use per-chatbot Gemini API key if available, otherwise use global
+        const geminiApiKey = (chatbot as any).geminiApiKey || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+        const geminiClient = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : gemini;
+
         // Stream response from Gemini
-        const stream = await gemini.models.generateContentStream({
+        const stream = await geminiClient.models.generateContentStream({
           model: aiModel,
           contents: fullContents,
           config: {
@@ -890,8 +979,14 @@ RECUERDA: Si no está arriba, NO lo sabes. Responde que no tienes esa informaci�
           })),
         ];
 
+        // Use per-chatbot OpenAI API key if available, otherwise use global
+        const openaiApiKey = (chatbot as any).openaiApiKey || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+        const openaiClient = openaiApiKey
+          ? new OpenAI({ apiKey: openaiApiKey, baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined })
+          : openai;
+
         // Stream response from OpenAI
-        const stream = await openai.chat.completions.create({
+        const stream = await openaiClient.chat.completions.create({
           model: aiModel,
           messages: chatMessages,
           stream: true,

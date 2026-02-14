@@ -32,7 +32,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BookOpen, Plus, FileText, Link as LinkIcon, Trash2, Upload, Globe, File } from "lucide-react";
+import { BookOpen, Plus, FileText, Link as LinkIcon, Trash2, Upload, Globe, File, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Chatbot, KnowledgeBaseItem } from "@shared/schema";
@@ -53,8 +54,11 @@ export default function KnowledgeBase() {
   const [urlInput, setUrlInput] = useState("");
   const [urlTitle, setUrlTitle] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileTitle, setFileTitle] = useState("");
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; results: { filename: string; success: boolean; error?: string }[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const batchFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: chatbots, isLoading: isLoadingChatbots } = useQuery<Chatbot[]>({
     queryKey: ["/api/chatbots"],
@@ -116,6 +120,58 @@ export default function KnowledgeBase() {
     },
   });
 
+  const uploadBatchMutation = useMutation({
+    mutationFn: async (files: File[]) => {
+      const batchSize = 10;
+      const allResults: { filename: string; success: boolean; error?: string }[] = [];
+
+      for (let i = 0; i < files.length; i += batchSize) {
+        const batch = files.slice(i, i + batchSize);
+        const formData = new FormData();
+        batch.forEach((file) => formData.append("files", file));
+        formData.append("chatbotId", selectedChatbot);
+
+        const response = await fetch("/api/knowledge-base/upload-batch", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          batch.forEach((file) => allResults.push({ filename: file.name, success: false, error: error.error }));
+        } else {
+          const data = await response.json();
+          allResults.push(...data.results);
+        }
+
+        setBatchProgress({
+          current: Math.min(i + batchSize, files.length),
+          total: files.length,
+          results: allResults,
+        });
+      }
+
+      return allResults;
+    },
+    onSuccess: (results) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
+      const successCount = results.filter((r) => r.success).length;
+      const failCount = results.filter((r) => !r.success).length;
+      toast({
+        title: "Subida por lotes completada",
+        description: `${successCount} archivo(s) subido(s) exitosamente${failCount > 0 ? `, ${failCount} con errores` : ""}.`,
+        variant: failCount > 0 ? "destructive" : "default",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error en subida por lotes",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const extractUrlMutation = useMutation({
     mutationFn: async (data: { chatbotId: number; url: string; title?: string }) => {
       const response = await apiRequest("POST", "/api/knowledge-base/url", data);
@@ -144,7 +200,9 @@ export default function KnowledgeBase() {
     setUrlInput("");
     setUrlTitle("");
     setSelectedFile(null);
+    setSelectedFiles([]);
     setFileTitle("");
+    setBatchProgress(null);
     setActiveTab("text");
   };
 
@@ -393,7 +451,7 @@ export default function KnowledgeBase() {
 
             <TabsContent value="file" className="space-y-4 mt-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Título (opcional)</label>
+                <label className="text-sm font-medium">Título (opcional, solo para archivo individual)</label>
                 <Input
                   value={fileTitle}
                   onChange={(e) => setFileTitle(e.target.value)}
@@ -402,7 +460,7 @@ export default function KnowledgeBase() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Subir Archivo</label>
+                <label className="text-sm font-medium">Subir Archivo(s)</label>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -411,47 +469,128 @@ export default function KnowledgeBase() {
                   className="hidden"
                   data-testid="input-file"
                 />
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
-                >
-                  {selectedFile ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <File className="h-8 w-8 text-primary" />
-                      <p className="font-medium">{selectedFile.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {(selectedFile.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <Upload className="h-8 w-8 text-muted-foreground" />
-                      <p className="font-medium">Haz clic para subir</p>
-                      <p className="text-sm text-muted-foreground">
-                        PDF, DOC, DOCX o TXT (máx 10MB)
-                      </p>
+                <input
+                  ref={batchFileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  multiple
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files) setSelectedFiles(Array.from(files));
+                  }}
+                  className="hidden"
+                  data-testid="input-batch-file"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+                  >
+                    {selectedFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <File className="h-6 w-6 text-primary" />
+                        <p className="font-medium text-sm truncate w-full">{selectedFile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(selectedFile.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="h-6 w-6 text-muted-foreground" />
+                        <p className="font-medium text-sm">Un archivo</p>
+                        <p className="text-xs text-muted-foreground">
+                          PDF, DOC, DOCX, TXT
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div
+                    onClick={() => batchFileInputRef.current?.click()}
+                    className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary transition-colors"
+                  >
+                    {selectedFiles.length > 0 ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <File className="h-6 w-6 text-primary" />
+                        <p className="font-medium text-sm">{selectedFiles.length} archivos</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(selectedFiles.reduce((acc, f) => acc + f.size, 0) / 1024 / 1024).toFixed(1)} MB total
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="h-6 w-6 text-muted-foreground" />
+                        <p className="font-medium text-sm">Lote (varios)</p>
+                        <p className="text-xs text-muted-foreground">
+                          Selecciona muchos archivos
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Máx 50MB por archivo. Para lotes, se procesan en grupos de 10.</p>
+              </div>
+
+              {batchProgress && (
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">Progreso de subida</span>
+                    <span>{batchProgress.current} / {batchProgress.total}</span>
+                  </div>
+                  <Progress value={(batchProgress.current / batchProgress.total) * 100} />
+                  {batchProgress.results.length > 0 && (
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {batchProgress.results.map((r, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs">
+                          {r.success ? (
+                            <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                          ) : (
+                            <XCircle className="h-3 w-3 text-red-500 shrink-0" />
+                          )}
+                          <span className="truncate">{r.filename}</span>
+                          {r.error && <span className="text-red-500 truncate">- {r.error}</span>}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-              </div>
-              <DialogFooter>
+              )}
+
+              <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={resetDialog}>
                   Cancelar
                 </Button>
-                <Button
-                  onClick={() => {
-                    if (!selectedFile || !selectedChatbot) return;
-                    const formData = new FormData();
-                    formData.append("file", selectedFile);
-                    formData.append("chatbotId", selectedChatbot);
-                    if (fileTitle) formData.append("title", fileTitle);
-                    uploadFileMutation.mutate(formData);
-                  }}
-                  disabled={!selectedFile || uploadFileMutation.isPending}
-                  data-testid="button-upload-file"
-                >
-                  {uploadFileMutation.isPending ? "Subiendo..." : "Subir Archivo"}
-                </Button>
+                {selectedFiles.length > 0 ? (
+                  <Button
+                    onClick={() => {
+                      if (!selectedChatbot || selectedFiles.length === 0) return;
+                      setBatchProgress({ current: 0, total: selectedFiles.length, results: [] });
+                      uploadBatchMutation.mutate(selectedFiles);
+                    }}
+                    disabled={uploadBatchMutation.isPending}
+                    data-testid="button-upload-batch"
+                  >
+                    {uploadBatchMutation.isPending ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Subiendo {selectedFiles.length} archivos...</>
+                    ) : (
+                      `Subir ${selectedFiles.length} Archivos`
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      if (!selectedFile || !selectedChatbot) return;
+                      const formData = new FormData();
+                      formData.append("file", selectedFile);
+                      formData.append("chatbotId", selectedChatbot);
+                      if (fileTitle) formData.append("title", fileTitle);
+                      uploadFileMutation.mutate(formData);
+                    }}
+                    disabled={!selectedFile || uploadFileMutation.isPending}
+                    data-testid="button-upload-file"
+                  >
+                    {uploadFileMutation.isPending ? "Subiendo..." : "Subir Archivo"}
+                  </Button>
+                )}
               </DialogFooter>
             </TabsContent>
 

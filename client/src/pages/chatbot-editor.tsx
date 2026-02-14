@@ -39,12 +39,14 @@ import type { Chatbot } from "@shared/schema";
 const chatbotFormSchema = z.object({
   name: z.string().min(1, "El nombre es obligatorio").max(100),
   description: z.string().max(500).optional(),
-  systemPrompt: z.string().max(2000).optional(),
+  systemPrompt: z.string().max(10000).optional(),
   aiModel: z.string(),
   aiProvider: z.string(),
   customEndpoint: z.string().optional(),
   customApiKey: z.string().optional(),
   customModelName: z.string().optional(),
+  openaiApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
   primaryColor: z.string(),
   textColor: z.string(),
   position: z.string(),
@@ -112,6 +114,8 @@ export default function ChatbotEditor() {
       customEndpoint: "",
       customApiKey: "",
       customModelName: "",
+      openaiApiKey: "",
+      geminiApiKey: "",
       primaryColor: "#3B82F6",
       textColor: "#FFFFFF",
       position: "bottom-right",
@@ -133,6 +137,8 @@ export default function ChatbotEditor() {
       customEndpoint: chatbot.customEndpoint || "",
       customApiKey: chatbot.customApiKey || "",
       customModelName: chatbot.customModelName || "",
+      openaiApiKey: (chatbot as any).openaiApiKey || "",
+      geminiApiKey: (chatbot as any).geminiApiKey || "",
       primaryColor: chatbot.primaryColor || "#3B82F6",
       textColor: chatbot.textColor || "#FFFFFF",
       position: chatbot.position || "bottom-right",
@@ -575,6 +581,64 @@ export default function ChatbotEditor() {
                         </div>
                       )}
 
+                      {watchedValues.aiProvider === "openai" && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                          <div className="text-sm font-medium text-muted-foreground mb-2">
+                            API Key de OpenAI (Opcional)
+                          </div>
+                          <FormField
+                            control={form.control}
+                            name="openaiApiKey"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Tu API Key de OpenAI</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="password"
+                                    placeholder="sk-..."
+                                    {...field}
+                                    data-testid="input-openai-api-key"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Si proporcionas tu propia API key, se usará en lugar de la configuración global del servidor. Obtén tu key en platform.openai.com
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      )}
+
+                      {watchedValues.aiProvider === "gemini" && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                          <div className="text-sm font-medium text-muted-foreground mb-2">
+                            API Key de Google Gemini (Opcional)
+                          </div>
+                          <FormField
+                            control={form.control}
+                            name="geminiApiKey"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Tu API Key de Gemini</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="password"
+                                    placeholder="AIza..."
+                                    {...field}
+                                    data-testid="input-gemini-api-key"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Si proporcionas tu propia API key, se usará en lugar de la configuración global del servidor. Obtén tu key en aistudio.google.com
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      )}
+
                       <FormField
                         control={form.control}
                         name="systemPrompt"
@@ -590,7 +654,7 @@ export default function ChatbotEditor() {
                               />
                             </FormControl>
                             <FormDescription>
-                              Instrucciones que definen la personalidad y comportamiento del chatbot
+                              Instrucciones que definen la personalidad y comportamiento del chatbot (máx. 10,000 caracteres)
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -967,6 +1031,8 @@ export default function ChatbotEditor() {
                     customEndpoint: watchedValues.customEndpoint || null,
                     customApiKey: watchedValues.customApiKey || null,
                     customModelName: watchedValues.customModelName || null,
+                    openaiApiKey: watchedValues.openaiApiKey || null,
+                    geminiApiKey: watchedValues.geminiApiKey || null,
                     primaryColor: watchedValues.primaryColor || "#3B82F6",
                     textColor: watchedValues.textColor || "#FFFFFF",
                     position: watchedValues.position || "bottom-right",

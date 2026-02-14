@@ -19,6 +19,9 @@ export const chatbots = pgTable("chatbots", {
   customEndpoint: text("custom_endpoint"),
   customApiKey: text("custom_api_key"),
   customModelName: text("custom_model_name"),
+  // Per-chatbot API keys for premium providers
+  openaiApiKey: text("openai_api_key"),
+  geminiApiKey: text("gemini_api_key"),
   // Appearance settings
   primaryColor: text("primary_color").default("#3B82F6"),
   textColor: text("text_color").default("#FFFFFF"),
