@@ -170,6 +170,7 @@ export default function KnowledgeBase() {
         description: `${successCount} archivo(s) subido(s) exitosamente${failCount > 0 ? `, ${failCount} con errores` : ""}.`,
         variant: failCount > 0 ? "destructive" : "default",
       });
+      resetDialog();
     },
     onError: (error: Error) => {
       toast({
