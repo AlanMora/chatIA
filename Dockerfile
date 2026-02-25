@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY package.json package-lock.json ./
 
-RUN npm ci
+RUN npm ci && npm install pdf-parse@1.1.1 --save-exact --ignore-scripts
 
 COPY . .
 RUN npm run build

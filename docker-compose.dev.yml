@@ -6,6 +6,8 @@ services:
     build: .
     env_file:
       - .env
+    environment:
+      - NODE_ENV=development
     ports:
       - "5001:5000"
     depends_on:

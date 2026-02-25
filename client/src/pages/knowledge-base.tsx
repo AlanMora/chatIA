@@ -93,9 +93,12 @@ export default function KnowledgeBase() {
 
   const uploadFileMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      const token = localStorage.getItem("authToken");
       const response = await fetch("/api/knowledge-base/upload", {
         method: "POST",
         body: formData,
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!response.ok) {
         const error = await response.json();
@@ -103,11 +106,13 @@ export default function KnowledgeBase() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
       toast({
         title: "Archivo subido",
-        description: "El contenido del archivo ha sido extraído y agregado a la base de conocimiento.",
+        description: data?.count !== undefined
+          ? `Se crearon ${data.count} elemento(s) desde el archivo JSONL.`
+          : "El contenido del archivo ha sido extraído y agregado a la base de conocimiento.",
       });
       resetDialog();
     },
@@ -131,9 +136,12 @@ export default function KnowledgeBase() {
         batch.forEach((file) => formData.append("files", file));
         formData.append("chatbotId", selectedChatbot);
 
+        const token = localStorage.getItem("authToken");
         const response = await fetch("/api/knowledge-base/upload-batch", {
           method: "POST",
           body: formData,
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
 
         if (!response.ok) {
@@ -464,7 +472,7 @@ export default function KnowledgeBase() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx,.txt"
+                  accept=".pdf,.doc,.docx,.txt,.jsonl"
                   onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                   className="hidden"
                   data-testid="input-file"
@@ -472,7 +480,7 @@ export default function KnowledgeBase() {
                 <input
                   ref={batchFileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx,.txt"
+                  accept=".pdf,.doc,.docx,.txt,.jsonl"
                   multiple
                   onChange={(e) => {
                     const files = e.target.files;
@@ -499,7 +507,7 @@ export default function KnowledgeBase() {
                         <Upload className="h-6 w-6 text-muted-foreground" />
                         <p className="font-medium text-sm">Un archivo</p>
                         <p className="text-xs text-muted-foreground">
-                          PDF, DOC, DOCX, TXT
+                          PDF, DOC, DOCX, TXT, JSONL
                         </p>
                       </div>
                     )}

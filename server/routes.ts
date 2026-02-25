@@ -21,12 +21,17 @@ const uploadDocs = multer({
       'application/pdf',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain'
+      'text/plain',
+      'application/jsonl',
+      'application/x-jsonl',
+      'application/json-lines',
+      'text/jsonl',
     ];
-    if (allowedTypes.includes(file.mimetype)) {
+    const isJsonlExt = file.originalname.toLowerCase().endsWith('.jsonl');
+    if (allowedTypes.includes(file.mimetype) || isJsonlExt) {
       cb(null, true);
     } else {
-      cb(new Error('Tipo de archivo no válido. Solo se permiten PDF, DOC, DOCX y TXT.'));
+      cb(new Error('Tipo de archivo no válido. Solo se permiten PDF, DOC, DOCX, TXT y JSONL.'));
     }
   }
 });
@@ -254,12 +259,14 @@ export async function registerRoutes(
   // Helper function to extract content from a file buffer
   async function extractFileContent(file: { mimetype: string; buffer: Buffer; originalname: string }): Promise<string> {
     if (file.mimetype === 'application/pdf') {
-      const pdfModule = await import("pdf-parse") as any;
+      // Usar la ruta interna para evitar el bug del index.js de pdf-parse v1
+      const pdfModule = await import("pdf-parse/lib/pdf-parse.js") as any;
       const pdfParse = pdfModule.default || pdfModule;
       try {
         const pdfData = await pdfParse(file.buffer);
         return pdfData.text || "";
       } catch (pdfError: any) {
+        console.error(`[pdf-parse] Error en "${file.originalname}":`, pdfError?.message || pdfError);
         throw new Error(`Error al leer el PDF "${file.originalname}": el archivo puede estar corrupto o protegido con contraseña.`);
       }
     } else if (file.mimetype === 'application/msword' ||
@@ -270,6 +277,54 @@ export async function registerRoutes(
       return file.buffer.toString('utf-8');
     }
     return "";
+  }
+
+  // Helper to detect JSONL files
+  function isJsonlFile(file: { mimetype: string; originalname: string }): boolean {
+    const jsonlMimeTypes = ['application/jsonl', 'application/x-jsonl', 'application/json-lines', 'text/jsonl'];
+    return jsonlMimeTypes.includes(file.mimetype) || file.originalname.toLowerCase().endsWith('.jsonl');
+  }
+
+  // Helper to parse a JSONL buffer into knowledge base items
+  function parseJsonlContent(buffer: Buffer, filename: string): { title: string; content: string }[] {
+    const text = buffer.toString('utf-8');
+    const lines = text.split('\n').filter(line => line.trim());
+    const items: { title: string; content: string }[] = [];
+    const titleFields = ['title', 'question', 'input', 'prompt', 'name', 'subject'];
+    const contentFields = ['content', 'text', 'answer', 'response', 'description', 'body', 'message', 'output'];
+
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        const obj = JSON.parse(lines[i]);
+        let title = '';
+        let content = '';
+
+        for (const field of titleFields) {
+          if (obj[field] && typeof obj[field] === 'string') { title = obj[field]; break; }
+        }
+        for (const field of contentFields) {
+          if (obj[field] && typeof obj[field] === 'string') { content = obj[field]; break; }
+        }
+
+        // Fallback: concatenate all string values
+        if (!content) {
+          const parts: string[] = [];
+          for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string' && (value as string).trim()) {
+              parts.push(`${key}: ${value}`);
+            }
+          }
+          content = parts.join('\n');
+        }
+
+        if (content.trim()) {
+          items.push({ title: title || `${filename} - ${i + 1}`, content: content.trim() });
+        }
+      } catch {
+        // Skip invalid JSON lines
+      }
+    }
+    return items;
   }
 
   // Upload single file and extract content
@@ -291,6 +346,26 @@ export async function registerRoutes(
       const chatbot = await storage.getChatbot(chatbotId);
       if (!chatbot || chatbot.userId !== userId) {
         return res.status(403).json({ error: "No tienes acceso a este chatbot." });
+      }
+
+      // JSONL: cada línea se convierte en un elemento separado
+      if (isJsonlFile(file)) {
+        const parsedItems = parseJsonlContent(file.buffer, title || file.originalname);
+        if (parsedItems.length === 0) {
+          return res.status(400).json({ error: `No se encontraron entradas válidas en el archivo JSONL "${file.originalname}".` });
+        }
+        const created = [];
+        for (const parsed of parsedItems) {
+          const item = await storage.createKnowledgeBaseItem({
+            chatbotId,
+            title: parsed.title,
+            content: parsed.content,
+            sourceType: "file",
+            sourceUrl: file.originalname,
+          });
+          created.push(item);
+        }
+        return res.status(201).json({ count: created.length, items: created });
       }
 
       let content = "";
@@ -348,6 +423,26 @@ export async function registerRoutes(
 
       for (const file of files) {
         try {
+          // JSONL: cada línea se convierte en un elemento separado
+          if (isJsonlFile(file)) {
+            const parsedItems = parseJsonlContent(file.buffer, file.originalname);
+            if (parsedItems.length === 0) {
+              results.push({ filename: file.originalname, success: false, error: 'No se encontraron entradas válidas en el archivo JSONL.' });
+              continue;
+            }
+            for (const parsed of parsedItems) {
+              await storage.createKnowledgeBaseItem({
+                chatbotId,
+                title: parsed.title,
+                content: parsed.content,
+                sourceType: "file",
+                sourceUrl: file.originalname,
+              });
+            }
+            results.push({ filename: file.originalname, success: true });
+            continue;
+          }
+
           let content = await extractFileContent(file);
 
           if (!content.trim()) {
