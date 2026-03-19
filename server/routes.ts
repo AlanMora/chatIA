@@ -9,6 +9,7 @@ import mammoth from "mammoth";
 import * as cheerio from "cheerio";
 import { registerElevenLabsRoutes } from "./elevenlabs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
+import { buildKnowledgeContext } from "./knowledge-base";
 
 import path from "path";
 import fs from "fs";
@@ -923,30 +924,14 @@ export async function registerRoutes(
       // Get conversation history
       const messages = await storage.getWidgetMessagesByConversation(conversation.id);
       
-      // Get knowledge base context
+      // Retrieve only the most relevant knowledge snippets so the prompt stays usable
       const knowledgeItems = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
       console.log(`[Widget Chat] Chatbot ${chatbotId} has ${knowledgeItems.length} knowledge base items`);
-      
-      let knowledgeContext = "";
-      if (knowledgeItems.length > 0) {
-        const kbContent = knowledgeItems.map(i => `### ${i.title}\n${i.content}`).join("\n\n---\n\n");
-        knowledgeContext = `
-
-=== INSTRUCCIONES CRÍTICAS - DEBES SEGUIRLAS SIEMPRE ===
-
-1. SOLO puedes responder usando la información de la BASE DE CONOCIMIENTO que aparece abajo.
-2. Si la pregunta NO puede ser respondida con la información de la base de conocimiento, DEBES responder EXACTAMENTE: "Lo siento, no tengo información sobre eso en mi base de conocimiento. Solo puedo ayudarte con los temas que tengo documentados."
-3. NUNCA inventes, supongas o uses información externa que no esté en la base de conocimiento.
-4. Si el usuario insiste en un tema que no está en tu base de conocimiento, repite amablemente que no puedes ayudar con eso.
-5. Sé amable y profesional, pero firme en no dar información que no tengas.
-
-=== BASE DE CONOCIMIENTO - ESTA ES TU ÚNICA FUENTE DE INFORMACIÓN ===
-${kbContent}
-=== FIN DE BASE DE CONOCIMIENTO ===
-
-RECUERDA: Si no está arriba, NO lo sabes. Responde que no tienes esa información.`;
-        console.log(`[Widget Chat] Knowledge context length: ${knowledgeContext.length} characters`);
-      }
+      const knowledgeContextResult = buildKnowledgeContext(knowledgeItems, messages);
+      const knowledgeContext = knowledgeContextResult.context;
+      console.log(
+        `[Widget Chat] Knowledge retrieval strategy=${knowledgeContextResult.strategy} items=${knowledgeContextResult.totalItems} chunks=${knowledgeContextResult.totalChunks} selected=${knowledgeContextResult.selectedChunks} contextChars=${knowledgeContextResult.contextChars}`,
+      );
 
       // Set up SSE
       res.setHeader("Content-Type", "text/event-stream");
