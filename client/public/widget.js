@@ -3,6 +3,7 @@
   
   const script = document.currentScript;
   const chatbotId = script.getAttribute('data-chatbot-id');
+  const ENABLE_ELEVENLABS_VOICE = false;
   
   if (!chatbotId) {
     console.error('ChatBot Widget: Missing data-chatbot-id attribute');
@@ -568,7 +569,7 @@
       }
       
       // Check if this chatbot has its own ElevenLabs agent configured
-      if (config.elevenLabsAgentId) {
+      if (ENABLE_ELEVENLABS_VOICE && config.elevenLabsAgentId) {
         voiceConfig = {
           agentId: config.elevenLabsAgentId,
           enabled: true,
@@ -860,6 +861,7 @@
   let ElevenLabsConversation = null;
 
   async function startVoiceConversation() {
+    if (!ENABLE_ELEVENLABS_VOICE) return;
     if (!voiceConfig || !voiceConfig.agentId || isVoiceConnecting) return;
 
     try {

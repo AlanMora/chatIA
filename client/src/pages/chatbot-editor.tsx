@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ChatWidget } from "@/components/chat-widget";
 import { ElevenLabsSettings } from "@/components/elevenlabs-settings";
 import { PredefinedResponses } from "@/components/predefined-responses";
+import { ELEVENLABS_VOICE_ENABLED } from "@/lib/features";
 import type { Chatbot } from "@shared/schema";
 
 const chatbotFormSchema = z.object({
@@ -356,10 +357,12 @@ export default function ChatbotEditor() {
                     <MessageSquare className="mr-1 h-3 w-3" />
                     Respuestas
                   </TabsTrigger>
-                  <TabsTrigger value="voice" className="flex-1" data-testid="tab-voice">
-                    <Mic className="mr-1 h-3 w-3" />
-                    Voz
-                  </TabsTrigger>
+                  {ELEVENLABS_VOICE_ENABLED && (
+                    <TabsTrigger value="voice" className="flex-1" data-testid="tab-voice">
+                      <Mic className="mr-1 h-3 w-3" />
+                      Voz
+                    </TabsTrigger>
+                  )}
                 </TabsList>
 
                 <TabsContent value="basic" className="mt-4 space-y-4">
@@ -958,52 +961,54 @@ export default function ChatbotEditor() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="voice" className="mt-4 space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Mic className="h-5 w-5" />
-                        Configuración de Voz
-                      </CardTitle>
-                      <CardDescription>
-                        Configura un agente de ElevenLabs para habilitar conversaciones por voz en este chatbot
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="elevenLabsAgentId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>ElevenLabs Agent ID</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="ej: abc123xyz..."
-                                {...field}
-                                data-testid="input-elevenlabs-agent-id"
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Ingresa el ID del agente de ElevenLabs para este chatbot. 
-                              Puedes obtenerlo desde el panel de ElevenLabs Conversational AI.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
+                {ELEVENLABS_VOICE_ENABLED && (
+                  <TabsContent value="voice" className="mt-4 space-y-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Mic className="h-5 w-5" />
+                          Configuración de Voz
+                        </CardTitle>
+                        <CardDescription>
+                          Configura un agente de ElevenLabs para habilitar conversaciones por voz en este chatbot
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="elevenLabsAgentId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>ElevenLabs Agent ID</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="ej: abc123xyz..."
+                                  {...field}
+                                  data-testid="input-elevenlabs-agent-id"
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Ingresa el ID del agente de ElevenLabs para este chatbot. 
+                                Puedes obtenerlo desde el panel de ElevenLabs Conversational AI.
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        {form.watch("elevenLabsAgentId") && (
+                          <div className="p-3 bg-muted rounded-md">
+                            <p className="text-sm text-muted-foreground">
+                              El botón de voz aparecerá en el widget cuando el agente esté configurado correctamente.
+                            </p>
+                          </div>
                         )}
-                      />
-                      {form.watch("elevenLabsAgentId") && (
-                        <div className="p-3 bg-muted rounded-md">
-                          <p className="text-sm text-muted-foreground">
-                            El botón de voz aparecerá en el widget cuando el agente esté configurado correctamente.
-                          </p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                  {!isNew && chatbotId && (
-                    <ElevenLabsSettings chatbotId={chatbotId} />
-                  )}
-                </TabsContent>
+                      </CardContent>
+                    </Card>
+                    {!isNew && chatbotId && (
+                      <ElevenLabsSettings chatbotId={chatbotId} />
+                    )}
+                  </TabsContent>
+                )}
               </Tabs>
             </form>
           </Form>

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Mic, PhoneOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ELEVENLABS_VOICE_ENABLED } from "@/lib/features";
 
 interface VoiceChatProps {
   onTranscript?: (role: "user" | "assistant", text: string) => void;
@@ -22,6 +23,12 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className, ag
   const conversationRef = useRef<any>(null);
 
   useEffect(() => {
+    if (!ELEVENLABS_VOICE_ENABLED) {
+      setIsEnabled(false);
+      setAgentId(null);
+      return;
+    }
+
     // If a specific agent ID is provided via props, use it directly
     if (propAgentId) {
       setAgentId(propAgentId);
@@ -47,6 +54,11 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className, ag
   }, [propAgentId]);
 
   const startConversation = useCallback(async () => {
+    if (!ELEVENLABS_VOICE_ENABLED) {
+      setError("La función de voz está deshabilitada");
+      return;
+    }
+
     if (!agentId) {
       setError("Configuración de voz no disponible");
       return;
@@ -103,7 +115,7 @@ export function VoiceChat({ onTranscript, primaryColor, textColor, className, ag
     setStatus("idle");
   }, []);
 
-  if (!isEnabled) {
+  if (!ELEVENLABS_VOICE_ENABLED || !isEnabled) {
     return null;
   }
 

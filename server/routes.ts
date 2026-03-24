@@ -10,6 +10,7 @@ import * as cheerio from "cheerio";
 import { registerElevenLabsRoutes } from "./elevenlabs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { buildKnowledgeContext } from "./knowledge-base";
+import { ELEVENLABS_VOICE_ENABLED } from "./feature-flags";
 
 import path from "path";
 import fs from "fs";
@@ -85,7 +86,9 @@ export async function registerRoutes(
   registerAuthRoutes(app);
 
   // ==================== ElevenLabs Voice AI ====================
-  await registerElevenLabsRoutes(app);
+  if (ELEVENLABS_VOICE_ENABLED) {
+    await registerElevenLabsRoutes(app);
+  }
 
   // ==================== Chatbots API ====================
   
@@ -837,7 +840,7 @@ export async function registerRoutes(
         position: chatbot.position,
         welcomeMessage: chatbot.welcomeMessage,
         avatarImage: chatbot.avatarImage,
-        elevenLabsAgentId: chatbot.elevenLabsAgentId,
+        elevenLabsAgentId: ELEVENLABS_VOICE_ENABLED ? chatbot.elevenLabsAgentId : null,
       });
     } catch (error) {
       console.error("Error fetching widget config:", error);
@@ -848,6 +851,10 @@ export async function registerRoutes(
   // Get signed URL for voice chat (per chatbot)
   app.get("/api/widget/:chatbotId/voice/signed-url", async (req, res) => {
     try {
+      if (!ELEVENLABS_VOICE_ENABLED) {
+        return res.status(404).json({ error: "Voice feature disabled" });
+      }
+
       const chatbotId = parseInt(req.params.chatbotId);
       const chatbot = await storage.getChatbot(chatbotId);
       

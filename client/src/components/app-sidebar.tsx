@@ -21,6 +21,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { ELEVENLABS_VOICE_ENABLED } from "@/lib/features";
 
 const menuItems = [
   {
@@ -53,7 +54,7 @@ const menuItems = [
     url: "/elevenlabs",
     icon: Mic,
   },
-];
+].filter((item) => ELEVENLABS_VOICE_ENABLED || item.url !== "/elevenlabs");
 
 export function AppSidebar() {
   const [location] = useLocation();

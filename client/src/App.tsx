@@ -26,6 +26,7 @@ import ChatbotTest from "@/pages/chatbot-test";
 import Landing from "@/pages/landing";
 import ElevenLabsPage from "@/pages/elevenlabs";
 import AuthPage from "@/pages/auth";
+import { ELEVENLABS_VOICE_ENABLED } from "@/lib/features";
 
 function Router() {
   return (
@@ -39,7 +40,9 @@ function Router() {
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/embed" component={EmbedPage} />
       <Route path="/analytics" component={Analytics} />
-      <Route path="/elevenlabs" component={ElevenLabsPage} />
+      {ELEVENLABS_VOICE_ENABLED && (
+        <Route path="/elevenlabs" component={ElevenLabsPage} />
+      )}
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
