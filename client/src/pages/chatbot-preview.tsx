@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, User, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VoiceChat } from "@/components/voice-chat";
+import { ChatMessageContent } from "@/components/chat-message-content";
 
 interface Message {
   id: string;
@@ -235,7 +236,10 @@ export default function ChatbotPreview() {
                         : undefined
                     }
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <ChatMessageContent
+                      content={message.content}
+                      role={message.role}
+                    />
                   </div>
                   {message.role === "user" && (
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">

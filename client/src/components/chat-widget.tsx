@@ -6,6 +6,7 @@ import { MessageSquare, X, Send, Bot, User, Loader2 } from "lucide-react";
 import type { Chatbot } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { VoiceChat } from "./voice-chat";
+import { ChatMessageContent } from "./chat-message-content";
 
 interface Message {
   id: string;
@@ -264,7 +265,10 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
                     : undefined
                 }
               >
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <ChatMessageContent
+                  content={message.content}
+                  role={message.role}
+                />
               </div>
               {message.role === "user" && (
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">

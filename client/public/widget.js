@@ -146,6 +146,8 @@
       border-radius: 16px;
       font-size: 14px;
       line-height: 1.4;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .chatbot-widget-message.bot .chatbot-widget-message-bubble {
       background: #f1f5f9;
@@ -154,6 +156,103 @@
     }
     .chatbot-widget-message.user .chatbot-widget-message-bubble {
       border-top-right-radius: 4px;
+    }
+    .chatbot-widget-message-bubble > *:first-child {
+      margin-top: 0;
+    }
+    .chatbot-widget-message-bubble > *:last-child {
+      margin-bottom: 0;
+    }
+    .chatbot-widget-message-bubble p,
+    .chatbot-widget-message-bubble ul,
+    .chatbot-widget-message-bubble ol,
+    .chatbot-widget-message-bubble pre,
+    .chatbot-widget-message-bubble blockquote,
+    .chatbot-widget-message-bubble table,
+    .chatbot-widget-message-bubble h1,
+    .chatbot-widget-message-bubble h2,
+    .chatbot-widget-message-bubble h3,
+    .chatbot-widget-message-bubble h4,
+    .chatbot-widget-message-bubble h5,
+    .chatbot-widget-message-bubble h6,
+    .chatbot-widget-message-bubble hr {
+      margin: 8px 0;
+    }
+    .chatbot-widget-message-bubble h1,
+    .chatbot-widget-message-bubble h2,
+    .chatbot-widget-message-bubble h3,
+    .chatbot-widget-message-bubble h4,
+    .chatbot-widget-message-bubble h5,
+    .chatbot-widget-message-bubble h6 {
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .chatbot-widget-message-bubble h1 { font-size: 18px; }
+    .chatbot-widget-message-bubble h2 { font-size: 16px; }
+    .chatbot-widget-message-bubble h3,
+    .chatbot-widget-message-bubble h4,
+    .chatbot-widget-message-bubble h5,
+    .chatbot-widget-message-bubble h6 { font-size: 15px; }
+    .chatbot-widget-message-bubble ul,
+    .chatbot-widget-message-bubble ol {
+      padding-left: 20px;
+    }
+    .chatbot-widget-message-bubble li + li {
+      margin-top: 4px;
+    }
+    .chatbot-widget-message-bubble a {
+      color: inherit;
+      text-decoration: underline;
+      overflow-wrap: anywhere;
+    }
+    .chatbot-widget-message-bubble code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble code {
+      padding: 2px 5px;
+      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.08);
+    }
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble pre {
+      overflow-x: auto;
+      border-radius: 12px;
+      padding: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble pre code {
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+    }
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble blockquote {
+      padding-left: 12px;
+      border-left: 2px solid #cbd5e1;
+      color: #475569;
+      font-style: italic;
+    }
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble table {
+      display: block;
+      width: 100%;
+      overflow-x: auto;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble th,
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble td {
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      text-align: left;
+      vertical-align: top;
+    }
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble th {
+      background: #e2e8f0;
+      font-weight: 600;
+    }
+    .chatbot-widget-message.bot .chatbot-widget-message-bubble hr {
+      border: none;
+      border-top: 1px solid #cbd5e1;
     }
     .chatbot-widget-typing {
       display: flex;
@@ -571,7 +670,7 @@
                   ${m.role === 'user' ? iconUser : iconBot}
                 </div>
                 <div class="chatbot-widget-message-bubble" style="${m.role === 'user' ? 'background: ' + (config.primaryColor || '#3B82F6') + '; color: ' + (config.textColor || '#fff') + ';' : ''}">
-                  ${escapeHtml(m.content)}
+                  ${renderMessageContent(m)}
                 </div>
               </div>
             `).join('')}
@@ -877,6 +976,325 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function escapeHtmlAttribute(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function renderMessageContent(message) {
+    if (message.role === 'assistant') {
+      return renderMarkdown(message.content);
+    }
+    return renderPlainText(message.content);
+  }
+
+  function renderPlainText(text) {
+    return escapeHtml(text || '').replace(/\n/g, '<br>');
+  }
+
+  function renderMarkdown(markdown) {
+    const normalized = String(markdown || '').replace(/\r\n?/g, '\n').trim();
+    if (!normalized) {
+      return '';
+    }
+
+    return renderMarkdownBlocks(normalized);
+  }
+
+  function renderMarkdownBlocks(markdown) {
+    const lines = markdown.split('\n');
+    const html = [];
+
+    for (let index = 0; index < lines.length;) {
+      const line = lines[index];
+
+      if (!line.trim()) {
+        index += 1;
+        continue;
+      }
+
+      const fenceMatch = line.match(/^\s*(```+|~~~+)\s*([\w-]+)?\s*$/);
+      if (fenceMatch) {
+        const fence = fenceMatch[1];
+        const language = fenceMatch[2] || '';
+        const codeLines = [];
+        index += 1;
+
+        while (index < lines.length && !new RegExp('^\\s*' + escapeRegExp(fence) + '\\s*$').test(lines[index])) {
+          codeLines.push(lines[index]);
+          index += 1;
+        }
+
+        if (index < lines.length) {
+          index += 1;
+        }
+
+        const languageClass = language
+          ? ' class="' + escapeHtmlAttribute('language-' + language) + '"'
+          : '';
+        html.push('<pre><code' + languageClass + '>' + escapeHtml(codeLines.join('\n')) + '</code></pre>');
+        continue;
+      }
+
+      if (isTableStart(lines, index)) {
+        const headers = splitTableRow(lines[index]);
+        const alignments = splitTableRow(lines[index + 1]).map(getTableAlignment);
+        const rows = [];
+
+        index += 2;
+
+        while (index < lines.length && lines[index].trim() && lines[index].includes('|')) {
+          rows.push(splitTableRow(lines[index]));
+          index += 1;
+        }
+
+        html.push(renderTable(headers, rows, alignments));
+        continue;
+      }
+
+      const headingMatch = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        html.push('<h' + level + '>' + renderInlineMarkdown(headingMatch[2]) + '</h' + level + '>');
+        index += 1;
+        continue;
+      }
+
+      if (isHorizontalRule(line)) {
+        html.push('<hr>');
+        index += 1;
+        continue;
+      }
+
+      if (isBlockquoteLine(line)) {
+        const quoteLines = [];
+
+        while (index < lines.length) {
+          const quoteLine = lines[index];
+          if (!quoteLine.trim()) {
+            quoteLines.push('');
+            index += 1;
+            continue;
+          }
+
+          if (!isBlockquoteLine(quoteLine)) {
+            break;
+          }
+
+          quoteLines.push(quoteLine.replace(/^\s*>\s?/, ''));
+          index += 1;
+        }
+
+        html.push('<blockquote>' + renderMarkdownBlocks(quoteLines.join('\n')) + '</blockquote>');
+        continue;
+      }
+
+      if (isUnorderedListLine(line) || isOrderedListLine(line)) {
+        const ordered = isOrderedListLine(line);
+        const items = [];
+        let start = 1;
+
+        while (index < lines.length) {
+          const currentLine = lines[index];
+          if (!currentLine.trim()) {
+            break;
+          }
+
+          const match = ordered
+            ? currentLine.match(/^\s*(\d+)[.)]\s+(.*)$/)
+            : currentLine.match(/^\s*[-*+]\s+(.*)$/);
+
+          if (!match) {
+            break;
+          }
+
+          if (ordered && items.length === 0) {
+            start = parseInt(match[1], 10) || 1;
+          }
+
+          items.push(renderInlineMarkdown(match[ordered ? 2 : 1]));
+          index += 1;
+        }
+
+        const tag = ordered ? 'ol' : 'ul';
+        const startAttr = ordered && start !== 1
+          ? ' start="' + escapeHtmlAttribute(start) + '"'
+          : '';
+        html.push('<' + tag + startAttr + '>' + items.map(function(item) {
+          return '<li>' + item + '</li>';
+        }).join('') + '</' + tag + '>');
+        continue;
+      }
+
+      const paragraphLines = [];
+      while (index < lines.length && lines[index].trim()) {
+        if (paragraphLines.length > 0 && isMarkdownBlockStart(lines, index)) {
+          break;
+        }
+
+        paragraphLines.push(lines[index]);
+        index += 1;
+      }
+
+      html.push('<p>' + renderInlineMarkdown(paragraphLines.join('\n')) + '</p>');
+    }
+
+    return html.join('');
+  }
+
+  function renderInlineMarkdown(text) {
+    const tokens = [];
+    const stash = function(value) {
+      const token = '@@CHAT_TOKEN_' + tokens.length + '@@';
+      tokens.push(value);
+      return token;
+    };
+
+    let html = escapeHtml(text || '');
+
+    html = html.replace(/`([^`\n]+)`/g, function(_match, code) {
+      return stash('<code>' + code + '</code>');
+    });
+
+    html = html.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function(_match, label, href) {
+      const safeHref = sanitizeUrl(href);
+      if (!safeHref) {
+        return label;
+      }
+
+      return stash(
+        '<a href="' + escapeHtmlAttribute(safeHref) + '" target="_blank" rel="noreferrer noopener">' + label + '</a>'
+      );
+    });
+
+    html = html.replace(/(\*\*\*|___)(.+?)\1/g, '<strong><em>$2</em></strong>');
+    html = html.replace(/(\*\*|__)(.+?)\1/g, '<strong>$2</strong>');
+    html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    html = html.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, '$1<em>$2</em>');
+    html = html.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?:;]|$)/g, '$1<em>$2</em>');
+    html = html.replace(/\n/g, '<br>');
+
+    return html.replace(/@@CHAT_TOKEN_(\d+)@@/g, function(_match, tokenIndex) {
+      return tokens[Number(tokenIndex)] || '';
+    });
+  }
+
+  function renderTable(headers, rows, alignments) {
+    const headerHtml = headers.map(function(cell, index) {
+      return '<th' + getAlignmentAttribute(alignments[index]) + '>' + renderInlineMarkdown(cell) + '</th>';
+    }).join('');
+
+    const bodyHtml = rows.map(function(row) {
+      return '<tr>' + headers.map(function(_cell, index) {
+        return '<td' + getAlignmentAttribute(alignments[index]) + '>' + renderInlineMarkdown(row[index] || '') + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+
+    return '<table><thead><tr>' + headerHtml + '</tr></thead><tbody>' + bodyHtml + '</tbody></table>';
+  }
+
+  function splitTableRow(row) {
+    return row
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map(function(cell) {
+        return cell.trim();
+      });
+  }
+
+  function getTableAlignment(cell) {
+    if (!cell) {
+      return '';
+    }
+
+    const trimmed = cell.trim();
+    const startsWithColon = trimmed.startsWith(':');
+    const endsWithColon = trimmed.endsWith(':');
+
+    if (startsWithColon && endsWithColon) {
+      return 'center';
+    }
+
+    if (endsWithColon) {
+      return 'right';
+    }
+
+    if (startsWithColon) {
+      return 'left';
+    }
+
+    return '';
+  }
+
+  function getAlignmentAttribute(alignment) {
+    return alignment
+      ? ' style="text-align: ' + escapeHtmlAttribute(alignment) + ';"'
+      : '';
+  }
+
+  function isTableStart(lines, index) {
+    return Boolean(
+      lines[index + 1] &&
+      lines[index].includes('|') &&
+      isTableSeparator(lines[index + 1])
+    );
+  }
+
+  function isTableSeparator(line) {
+    return /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(line);
+  }
+
+  function isMarkdownBlockStart(lines, index) {
+    const line = lines[index];
+    return (
+      isTableStart(lines, index) ||
+      /^\s*(#{1,6})\s+/.test(line) ||
+      /^\s*(```+|~~~+)/.test(line) ||
+      isHorizontalRule(line) ||
+      isBlockquoteLine(line) ||
+      isUnorderedListLine(line) ||
+      isOrderedListLine(line)
+    );
+  }
+
+  function isHorizontalRule(line) {
+    return /^\s*(?:\*\s*){3,}$/.test(line) ||
+      /^\s*(?:-\s*){3,}$/.test(line) ||
+      /^\s*(?:_\s*){3,}$/.test(line);
+  }
+
+  function isBlockquoteLine(line) {
+    return /^\s*>\s?/.test(line);
+  }
+
+  function isUnorderedListLine(line) {
+    return /^\s*[-*+]\s+/.test(line);
+  }
+
+  function isOrderedListLine(line) {
+    return /^\s*\d+[.)]\s+/.test(line);
+  }
+
+  function sanitizeUrl(url) {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'mailto:') {
+        return parsed.href;
+      }
+    } catch (_error) {}
+
+    return '';
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
   
   async function sendMessage(text) {

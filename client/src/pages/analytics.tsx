@@ -22,6 +22,7 @@ import type { Chatbot } from "@shared/schema";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
+import { ChatMessageContent } from "@/components/chat-message-content";
 import { useToast } from "@/hooks/use-toast";
 
 interface AnalyticsStats {
@@ -459,7 +460,10 @@ export default function Analytics() {
                       : 'bg-muted'
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  <ChatMessageContent
+                    content={msg.content}
+                    role={msg.role === "user" ? "user" : "assistant"}
+                  />
                   <div className={`text-xs mt-1 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                     {new Date(msg.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                     {msg.role === 'assistant' && msg.responseTimeMs && (

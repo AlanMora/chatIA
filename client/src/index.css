@@ -286,3 +286,79 @@
     inset: -1px;
   }
 }
+
+@layer components {
+  .chat-markdown {
+    @apply prose prose-sm max-w-none break-words text-foreground;
+  }
+
+  .chat-markdown > :first-child {
+    margin-top: 0;
+  }
+
+  .chat-markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  .chat-markdown :where(p, ul, ol, pre, blockquote, table, h1, h2, h3, h4, h5, h6, hr) {
+    margin-top: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .chat-markdown :where(ul, ol) {
+    padding-left: 1.25rem;
+  }
+
+  .chat-markdown :where(li > p) {
+    margin: 0;
+  }
+
+  .chat-markdown :where(code) {
+    @apply rounded bg-black/5 px-1 py-0.5 font-mono text-[0.85em];
+  }
+
+  .chat-markdown :where(code)::before,
+  .chat-markdown :where(code)::after {
+    content: none;
+  }
+
+  .chat-markdown :where(pre) {
+    @apply overflow-x-auto rounded-xl bg-slate-950 px-3 py-2 text-slate-50;
+  }
+
+  .chat-markdown :where(pre code) {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-size: 0.875em;
+  }
+
+  .chat-markdown :where(blockquote) {
+    @apply border-l-2 border-border pl-3 italic text-muted-foreground;
+  }
+
+  .chat-markdown :where(a) {
+    @apply underline underline-offset-2;
+    overflow-wrap: anywhere;
+  }
+
+  .chat-markdown :where(table) {
+    @apply block w-full overflow-x-auto border-collapse text-sm;
+  }
+
+  .chat-markdown :where(th, td) {
+    @apply border border-border px-2 py-1 text-left align-top;
+  }
+
+  .chat-markdown :where(th) {
+    @apply bg-muted/60 font-semibold;
+  }
+
+  .chat-markdown :where(hr) {
+    @apply border-border;
+  }
+
+  .chat-markdown :where(img) {
+    @apply rounded-lg;
+  }
+}
