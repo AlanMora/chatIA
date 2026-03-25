@@ -12,15 +12,13 @@ export async function setupAuth(app: Express) {
   }
 }
 
-export function registerAuthRoutes(app: Express) {
+export async function registerAuthRoutes(app: Express) {
   if (isReplitEnvironment) {
-    import("../replit_integrations/auth/routes").then(({ registerAuthRoutes }) => {
-      registerAuthRoutes(app);
-    });
+    const { registerAuthRoutes: registerReplitAuthRoutes } = await import("../replit_integrations/auth/routes");
+    registerReplitAuthRoutes(app);
   } else {
-    import("./jwt-auth").then(({ registerJWTAuthRoutes }) => {
-      registerJWTAuthRoutes(app);
-    });
+    const { registerJWTAuthRoutes } = await import("./jwt-auth");
+    registerJWTAuthRoutes(app);
   }
 }
 

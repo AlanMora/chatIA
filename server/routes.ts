@@ -83,7 +83,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   // ==================== Authentication ====================
   await setupAuth(app);
-  registerAuthRoutes(app);
+  await registerAuthRoutes(app);
 
   // ==================== ElevenLabs Voice AI ====================
   if (ELEVENLABS_VOICE_ENABLED) {
