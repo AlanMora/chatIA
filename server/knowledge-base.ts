@@ -199,31 +199,38 @@ export async function buildKnowledgeContext(
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
     }
-// 3. Format the context with Sources
-const body = similarChunks
-  .map(chunk => `[FUENTE: ${chunk.sourceTitle}]: ${chunk.content}`)
-  .join("\n\n---\n\n");
+    // 3. Format the context
+    const body = similarChunks
+      .map(chunk => `[DOCUMENTO: ${chunk.sourceTitle}]: ${chunk.content}`)
+      .join("\n\n---\n\n");
 
-const context = `
-=== REGLAS DE ORO DE VERIFICACIÓN ===
-1. RESPONDE ÚNICAMENTE usando la información de los fragmentos proporcionados.
-2. CITADO OBLIGATORIO: Al final de cada frase o párrafo que use información del conocimiento, DEBES poner la fuente entre corchetes, por ejemplo: [Fuente: Manual_Procedimientos.pdf].
-3. Si la información NO está en los fragmentos, responde: "Lo siento, esa información no se encuentra en mis documentos oficiales."
-4. PROHIBIDO: No uses conocimiento general, no inventes datos, no supongas nada que no esté escrito abajo.
+    const sources = Array.from(new Set(similarChunks.map(c => c.sourceTitle)));
+    console.log(`[RAG] Found information in: ${sources.join(", ")}`);
 
-=== FRAGMENTOS DE CONOCIMIENTO (FUENTES OFICIALES) ===
+    const context = `
+=== REGLAS DE RESPUESTA ===
+1. Responde de forma natural y fluida usando la información de los fragmentos de abajo.
+2. NO menciones los nombres de los archivos ni pongas citas en tu respuesta final.
+3. Si la información no está abajo, indica que no tienes esa información.
+4. Mantén un tono profesional y directo.
+
+=== FRAGMENTOS DE CONOCIMIENTO ===
 ${body}
 === FIN DE FRAGMENTOS ===
 `;
 
-
     return { 
       context, 
       strategy: "vector", 
-      chunksFound: similarChunks.length 
+      chunksFound: similarChunks.length,
+      sources
     };
   } catch (error) {
     console.error("[RAG] Error in buildKnowledgeContext:", error);
+    return { context: "", strategy: "empty" };
+  }
+}
+] Error in buildKnowledgeContext:", error);
     return { context: "", strategy: "empty" };
   }
 }
