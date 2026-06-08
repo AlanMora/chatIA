@@ -9,7 +9,7 @@ import mammoth from "mammoth";
 import * as cheerio from "cheerio";
 import { registerElevenLabsRoutes } from "./elevenlabs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
-import { buildKnowledgeContext } from "./knowledge-base";
+import { buildKnowledgeContext, processKnowledgeItem } from "./knowledge-base";
 import { ELEVENLABS_VOICE_ENABLED } from "./feature-flags";
 
 import path from "path";
@@ -233,6 +233,7 @@ export async function registerRoutes(
       }
       
       const item = await storage.createKnowledgeBaseItem(parsed.data);
+      await processKnowledgeItem(item);
       res.status(201).json(item);
     } catch (error) {
       console.error("Error creating knowledge base item:", error);
@@ -367,6 +368,7 @@ export async function registerRoutes(
             sourceType: "file",
             sourceUrl: file.originalname,
           });
+          await processKnowledgeItem(item);
           created.push(item);
         }
         return res.status(201).json({ count: created.length, items: created });
@@ -392,6 +394,8 @@ export async function registerRoutes(
         sourceType: "file",
         sourceUrl: file.originalname,
       });
+
+      await processKnowledgeItem(item);
 
       res.status(201).json(item);
     } catch (error: any) {
@@ -435,13 +439,14 @@ export async function registerRoutes(
               continue;
             }
             for (const parsed of parsedItems) {
-              await storage.createKnowledgeBaseItem({
+              const item = await storage.createKnowledgeBaseItem({
                 chatbotId,
                 title: parsed.title,
                 content: parsed.content,
                 sourceType: "file",
                 sourceUrl: file.originalname,
               });
+              await processKnowledgeItem(item);
             }
             results.push({ filename: file.originalname, success: true });
             continue;
@@ -465,6 +470,8 @@ export async function registerRoutes(
             sourceType: "file",
             sourceUrl: file.originalname,
           });
+
+          await processKnowledgeItem(item);
 
           results.push({ filename: file.originalname, success: true, item });
         } catch (fileError: any) {
@@ -572,6 +579,8 @@ export async function registerRoutes(
         sourceType: "url",
         sourceUrl: url,
       });
+
+      await processKnowledgeItem(item);
 
       res.status(201).json(item);
     } catch (error) {
@@ -816,6 +825,40 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching limits:", error);
       res.status(500).json({ error: "Failed to fetch limits" });
+    }
+  });
+
+  // Admin: Reprocess all knowledge base items for a chatbot (Vectorize existing data)
+  app.post("/api/admin/reprocess/:chatbotId", isAuthenticated, async (req: any, res) => {
+    try {
+      const chatbotId = parseInt(req.params.chatbotId);
+      const userId = req.user?.claims?.sub;
+      const chatbot = await storage.getChatbot(chatbotId);
+      
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const items = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
+      console.log(`[Admin] Reprocessing ${items.length} items for chatbot ${chatbotId}`);
+      
+      // We don't await the whole thing to avoid timeout, but we start it
+      (async () => {
+        for (const item of items) {
+          try {
+            console.log(`[Admin] Vectorizing item: ${item.title}`);
+            await processKnowledgeItem(item);
+          } catch (err) {
+            console.error(`[Admin] Failed to vectorize item ${item.id}:`, err);
+          }
+        }
+        console.log(`[Admin] Finished reprocessing chatbot ${chatbotId}`);
+      })();
+
+      res.json({ message: "Reprocessing started in background", totalItems: items.length });
+    } catch (error) {
+      console.error("Error starting reprocessing:", error);
+      res.status(500).json({ error: "Failed to start reprocessing" });
     }
   });
 

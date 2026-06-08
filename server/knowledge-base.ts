@@ -1,407 +1,227 @@
-import type { KnowledgeBaseItem } from "@shared/schema";
+import type { KnowledgeBaseItem, KnowledgeBaseChunk } from "@shared/schema";
+import OpenAI from "openai";
+import { storage } from "./storage";
+import { GoogleGenAI } from "@google/genai";
 
 type MessageLike = {
   role: string;
   content: string;
 };
 
-type KnowledgeChunk = {
-  itemId: number;
-  title: string;
-  sourceUrl: string | null;
-  index: number;
-  content: string;
-  normalizedTitle: string;
-  normalizedContent: string;
-  tokenCounts: Map<string, number>;
-};
-
-type RetrievedChunk = KnowledgeChunk & {
-  score: number;
-};
-
 export type KnowledgeContextResult = {
   context: string;
-  totalItems: number;
-  totalChunks: number;
-  selectedChunks: number;
-  contextChars: number;
-  strategy: "empty" | "full" | "ranked";
+  strategy: "empty" | "full" | "vector";
+  chunksFound?: number;
 };
 
-const CHUNK_SIZE = 1_400;
-const CHUNK_OVERLAP = 220;
-const MAX_CONTEXT_CHARS = 24_000;
-const MAX_RETRIEVED_CHUNKS = 16;
-const MAX_CHUNKS_PER_ITEM = 3;
-const FULL_CONTEXT_THRESHOLD = 18_000;
-const MAX_CACHE_ENTRIES = 25;
-const MIN_RELEVANCE_SCORE = 7;
+const CHUNK_SIZE = 1000;
+const CHUNK_OVERLAP = 200;
+const MAX_CONCURRENCY = 5;
 
-const STOP_WORDS = new Set([
-  "a", "al", "algo", "algun", "alguna", "algunas", "alguno", "algunos", "ante", "antes",
-  "aquel", "aquella", "aquellas", "aquello", "aquellos", "asi", "aun", "aunque", "bajo",
-  "bien", "cada", "casi", "como", "con", "contra", "cual", "cuales", "cualquier", "cuando",
-  "cuanta", "cuantas", "cuanto", "cuantos", "de", "del", "desde", "donde", "dos", "el",
-  "ella", "ellas", "ello", "ellos", "en", "entre", "era", "erais", "eran", "eras", "eres",
-  "es", "esa", "esas", "ese", "eso", "esos", "esta", "estaba", "estaban", "estado", "estais",
-  "estamos", "estan", "estar", "estas", "este", "esto", "estos", "fue", "fueron", "fui",
-  "fuimos", "ha", "habia", "hace", "hacia", "han", "hasta", "hay", "incluso", "la", "las",
-  "le", "les", "lo", "los", "mas", "me", "mi", "mientras", "mis", "mucha", "muchas", "mucho",
-  "muchos", "muy", "nada", "ni", "no", "nos", "nosotras", "nosotros", "nuestra", "nuestras",
-  "nuestro", "nuestros", "o", "os", "otra", "otras", "otro", "otros", "para", "pero", "poco",
-  "por", "porque", "que", "quien", "quienes", "se", "sea", "segun", "ser", "si", "siempre",
-  "sin", "sobre", "sois", "solo", "somos", "son", "soy", "su", "sus", "tal", "tambien",
-  "te", "teneis", "tenemos", "tener", "tengo", "ti", "tiene", "tienen", "todo", "todos",
-  "tu", "tus", "un", "una", "unas", "uno", "unos", "usted", "ustedes", "ya",
-  "about", "after", "all", "also", "an", "and", "any", "are", "as", "at", "be", "been",
-  "being", "between", "both", "but", "by", "can", "could", "did", "do", "does", "for",
-  "from", "had", "has", "have", "he", "her", "here", "hers", "him", "his", "how", "i",
-  "if", "in", "into", "is", "it", "its", "just", "may", "might", "more", "most", "must",
-  "my", "need", "not", "of", "on", "only", "or", "our", "ours", "please", "should", "so",
-  "some", "than", "that", "the", "their", "theirs", "them", "then", "there", "these", "they",
-  "this", "those", "to", "too", "under", "up", "us", "very", "was", "we", "were", "what",
-  "when", "where", "which", "who", "why", "will", "with", "would", "you", "your", "yours",
-]);
+/**
+ * Generates an embedding based on the chatbot's provider
+ */
+async function generateEmbedding(text: string, chatbot: any): Promise<number[]> {
+  const provider = chatbot.aiProvider || "openai";
+  const textToEmbed = text.replace(/\n/g, " ");
 
-const chunkCache = new Map<string, KnowledgeChunk[]>();
+  console.log(`[RAG] Generating embedding for chatbot ${chatbot.id} using provider: ${provider}`);
 
-function normalizeSearchText(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+  try {
+    if (provider === "gemini") {
+      const apiKey = chatbot.geminiApiKey || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      if (!apiKey) throw new Error("Missing Gemini API Key");
+      
+      const genAI = new GoogleGenAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+      const result = await model.embedContent(textToEmbed);
+      const values = result.embedding.values;
+      
+      if (values.length < 1536) {
+        return [...values, ...new Array(1536 - values.length).fill(0)];
+      }
+      return values.slice(0, 1536);
 
-function normalizePromptText(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/\u0000/g, "")
-    .replace(/[^\S\n]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+    } else if (provider === "custom" || provider === "openrouter") {
+      const baseURL = provider === "openrouter" 
+        ? "https://openrouter.ai/api/v1" 
+        : chatbot.customEndpoint?.replace(/\/chat\/completions\/?$/, "") || "";
+      
+      const apiKey = provider === "openrouter"
+        ? process.env.OPENROUTER_API_KEY
+        : chatbot.customApiKey || "not-required";
 
-function tokenize(text: string): string[] {
-  return normalizeSearchText(text)
-    .split(" ")
-    .filter((token) => token.length >= 2 && !STOP_WORDS.has(token));
-}
+      console.log(`[RAG] Custom/OpenRouter request to: ${baseURL}/embeddings`);
 
-function buildTokenCounts(tokens: string[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const token of tokens) {
-    counts.set(token, (counts.get(token) || 0) + 1);
-  }
-  return counts;
-}
+      const response = await fetch(`${baseURL}/embeddings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: provider === "openrouter" ? "openai/text-embedding-3-small" : chatbot.customModelName || "default",
+          input: textToEmbed,
+        }),
+      });
 
-function buildCacheKey(items: KnowledgeBaseItem[]): string {
-  return items
-    .map((item) => {
-      const createdAt =
-        item.createdAt instanceof Date
-          ? item.createdAt.getTime()
-          : new Date(item.createdAt).getTime();
-      return `${item.id}:${createdAt}:${item.content.length}:${item.title.length}`;
-    })
-    .join("|");
-}
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Embedding API error (${response.status}): ${err}`);
+      }
 
-function pruneChunkCache(): void {
-  while (chunkCache.size > MAX_CACHE_ENTRIES) {
-    const oldestKey = chunkCache.keys().next().value;
-    if (!oldestKey) {
-      return;
+      const data = await response.json();
+      if (!data.data || !data.data[0] || !data.data[0].embedding) {
+        throw new Error("Invalid embedding response format");
+      }
+      const values = data.data[0].embedding;
+      
+      if (values.length < 1536) {
+        return [...values, ...new Array(1536 - values.length).fill(0)];
+      }
+      return values.slice(0, 1536);
+
+    } else {
+      // Default: OpenAI
+      // IMPORTANTE: Priorizamos la llave del chatbot
+      const apiKey = chatbot.openaiApiKey || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+      
+      if (!apiKey || apiKey === "Missing Key") {
+        console.error("[RAG] Error: No OpenAI API Key found for chatbot or in ENV");
+        throw new Error("Missing OpenAI API Key");
+      }
+
+      const openaiInstance = new OpenAI({
+        apiKey: apiKey,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || "https://api.openai.com/v1",
+      });
+
+      const response = await openaiInstance.embeddings.create({
+        model: "text-embedding-3-small",
+        input: textToEmbed,
+      });
+      return response.data[0].embedding;
     }
-    chunkCache.delete(oldestKey);
+  } catch (error) {
+    console.error(`[RAG] Error generating embedding (${provider}):`, error);
+    throw error;
   }
 }
 
+/**
+ * Splits text into chunks for embedding
+ */
 function splitIntoChunks(text: string): string[] {
-  const normalized = normalizePromptText(text);
-  if (!normalized) {
-    return [];
-  }
-
   const chunks: string[] = [];
   let start = 0;
 
-  while (start < normalized.length) {
-    let end = Math.min(start + CHUNK_SIZE, normalized.length);
-
-    if (end < normalized.length) {
-      const windowStart = start + Math.floor(CHUNK_SIZE * 0.55);
-      const sentenceBreak = normalized.lastIndexOf(". ", end);
-      const newlineBreak = normalized.lastIndexOf("\n", end);
-      const breakPoint = Math.max(sentenceBreak, newlineBreak);
-      if (breakPoint >= windowStart) {
+  while (start < text.length) {
+    let end = Math.min(start + CHUNK_SIZE, text.length);
+    
+    if (end < text.length) {
+      const periodIndex = text.lastIndexOf(". ", end);
+      const newlineIndex = text.lastIndexOf("\n", end);
+      const breakPoint = Math.max(periodIndex, newlineIndex);
+      
+      if (breakPoint > start + (CHUNK_SIZE * 0.5)) {
         end = breakPoint + 1;
       }
     }
 
-    const chunk = normalized.slice(start, end).trim();
-    if (chunk) {
-      chunks.push(chunk);
-    }
-
-    if (end >= normalized.length) {
-      break;
-    }
-
-    start = Math.max(end - CHUNK_OVERLAP, start + 1);
+    chunks.push(text.slice(start, end).trim());
+    start = end - CHUNK_OVERLAP;
+    if (start >= text.length - CHUNK_OVERLAP) break;
   }
 
-  return chunks;
+  return chunks.filter(c => c.length > 0);
 }
 
-function buildChunks(items: KnowledgeBaseItem[]): KnowledgeChunk[] {
-  const cacheKey = buildCacheKey(items);
-  const cached = chunkCache.get(cacheKey);
-  if (cached) {
-    chunkCache.delete(cacheKey);
-    chunkCache.set(cacheKey, cached);
-    return cached;
-  }
+/**
+ * Processes a knowledge base item: chunks it and stores embeddings
+ */
+export async function processKnowledgeItem(item: KnowledgeBaseItem): Promise<void> {
+  const chatbot = await storage.getChatbot(item.chatbotId!);
+  if (!chatbot) throw new Error("Chatbot not found");
 
-  const chunks = items.flatMap((item) => {
-    const title = item.title || "Documento sin titulo";
-    const sourceUrl = item.sourceUrl || null;
-    const normalizedTitle = normalizeSearchText(title);
+  console.log(`[RAG] Processing item ${item.id} for chatbot ${chatbot.id} (${chatbot.name})`);
 
-    return splitIntoChunks(item.content).map((content, index) => {
-      const normalizedContent = normalizeSearchText(content);
-      return {
+  const chunks = splitIntoChunks(item.content);
+  const chunksWithEmbeddings: any[] = [];
+  
+  // Procesamiento secuencial controlado para asegurar que cada uno use la llave correcta
+  for (let i = 0; i < chunks.length; i++) {
+    const content = chunks[i];
+    try {
+      const embedding = await generateEmbedding(content, chatbot);
+      chunksWithEmbeddings.push({
         itemId: item.id,
-        title,
-        sourceUrl,
-        index,
+        chatbotId: item.chatbotId!,
         content,
-        normalizedTitle,
-        normalizedContent,
-        tokenCounts: buildTokenCounts(tokenize(content)),
-      };
-    });
-  });
+        embedding,
+        index: i,
+      });
+    } catch (err) {
+      console.error(`[RAG] Failed to process chunk ${i} of item ${item.id}:`, err);
+      throw err;
+    }
+  }
 
-  chunkCache.set(cacheKey, chunks);
-  pruneChunkCache();
-  return chunks;
+  // Delete old chunks if any (re-processing)
+  await storage.deleteKnowledgeBaseChunksByItem(item.id);
+  
+  // Batch insert new chunks
+  if (chunksWithEmbeddings.length > 0) {
+    await storage.createKnowledgeBaseChunks(chunksWithEmbeddings);
+    console.log(`[RAG] Successfully stored ${chunksWithEmbeddings.length} chunks for item ${item.id}`);
+  }
 }
 
-function buildRetrievalQuery(messages: MessageLike[]): string {
-  const recentUserMessages = messages
-    .filter((message) => message.role === "user" && message.content?.trim())
-    .slice(-4)
-    .map((message) => message.content.trim());
+/**
+ * Builds context for a chat message using Vector Search
+ */
+export async function buildKnowledgeContext(
+  chatbotId: number,
+  messages: MessageLike[]
+): Promise<KnowledgeContextResult> {
+  const chatbot = await storage.getChatbot(chatbotId);
+  if (!chatbot) return { context: "", strategy: "empty" };
 
-  const query = recentUserMessages.join("\n");
-  return query.slice(-2_000);
-}
-
-function buildKeyPhrases(tokens: string[]): string[] {
-  const phrases: string[] = [];
-
-  for (let size = 3; size >= 2; size--) {
-    for (let index = 0; index <= tokens.length - size; index++) {
-      const phraseTokens = tokens.slice(index, index + size);
-      const phrase = phraseTokens.join(" ");
-      if (phrase.length >= 8) {
-        phrases.push(phrase);
-      }
-    }
+  const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content;
+  
+  if (!lastUserMessage) {
+    return { context: "", strategy: "empty" };
   }
 
-  return Array.from(new Set(phrases)).slice(0, 8);
-}
+  try {
+    const queryEmbedding = await generateEmbedding(lastUserMessage, chatbot);
+    const similarChunks = await storage.searchSimilarChunks(chatbotId, queryEmbedding, 5);
 
-function scoreChunk(chunk: KnowledgeChunk, query: string, queryTokens: string[]): number {
-  if (!queryTokens.length) {
-    return 0;
-  }
-
-  let score = 0;
-  const matchedTokens = new Set<string>();
-  const keyPhrases = buildKeyPhrases(queryTokens);
-  const normalizedQuery = normalizeSearchText(query);
-
-  for (const token of queryTokens) {
-    const titleMatches = chunk.normalizedTitle.includes(token);
-    const contentHits = chunk.tokenCounts.get(token) || 0;
-
-    if (titleMatches) {
-      score += 9;
-      matchedTokens.add(token);
+    if (similarChunks.length === 0) {
+      return { context: "", strategy: "empty" };
     }
 
-    if (contentHits > 0) {
-      score += 6 + Math.min(contentHits, 4) * 2;
-      matchedTokens.add(token);
-    }
-  }
+    const body = similarChunks
+      .map(chunk => `[Fragmento]: ${chunk.content}`)
+      .join("\n\n---\n\n");
 
-  if (normalizedQuery && normalizedQuery.length >= 18 && chunk.normalizedContent.includes(normalizedQuery)) {
-    score += 18;
-  }
+    const context = `
+=== INSTRUCCIONES CRITICAS ===
+1. SOLO puedes responder usando la informacion de los FRAGMENTOS RELEVANTES de abajo.
+2. Si la respuesta no esta en los fragmentos, di: "Lo siento, no tengo esa información en mi base de conocimiento."
+3. NUNCA inventes informacion.
 
-  for (const phrase of keyPhrases) {
-    if (chunk.normalizedTitle.includes(phrase)) {
-      score += 12;
-    } else if (chunk.normalizedContent.includes(phrase)) {
-      score += 8;
-    }
-  }
-
-  score += matchedTokens.size * 3;
-
-  if (chunk.index === 0 && matchedTokens.size > 0) {
-    score += 2;
-  }
-
-  return score;
-}
-
-function selectRelevantChunks(chunks: KnowledgeChunk[], query: string): RetrievedChunk[] {
-  const queryTokens = tokenize(query);
-  const ranked = chunks
-    .map((chunk) => ({
-      ...chunk,
-      score: scoreChunk(chunk, query, queryTokens),
-    }))
-    .filter((chunk) => chunk.score > 0)
-    .sort((left, right) => right.score - left.score);
-
-  if (ranked.length === 0) {
-    return [];
-  }
-
-  const selected: RetrievedChunk[] = [];
-  const perItemCount = new Map<number, number>();
-  let totalChars = 0;
-
-  for (const chunk of ranked) {
-    if (chunk.score < MIN_RELEVANCE_SCORE && selected.length > 0) {
-      break;
-    }
-
-    const currentItemCount = perItemCount.get(chunk.itemId) || 0;
-    if (currentItemCount >= MAX_CHUNKS_PER_ITEM) {
-      continue;
-    }
-
-    const blockLength = chunk.content.length + chunk.title.length + 64;
-    if (selected.length > 0 && totalChars + blockLength > MAX_CONTEXT_CHARS) {
-      continue;
-    }
-
-    selected.push(chunk);
-    perItemCount.set(chunk.itemId, currentItemCount + 1);
-    totalChars += blockLength;
-
-    if (selected.length >= MAX_RETRIEVED_CHUNKS || totalChars >= MAX_CONTEXT_CHARS) {
-      break;
-    }
-  }
-
-  if (selected.length === 0 && ranked[0].score > 0) {
-    return [ranked[0]];
-  }
-
-  return selected;
-}
-
-function formatAllItems(items: KnowledgeBaseItem[]): string {
-  const body = items
-    .map((item) => `### ${item.title}\n${normalizePromptText(item.content)}`)
-    .join("\n\n---\n\n");
-
-  return `
-
-=== INSTRUCCIONES CRITICAS - DEBES SEGUIRLAS SIEMPRE ===
-
-1. SOLO puedes responder usando la informacion de la BASE DE CONOCIMIENTO que aparece abajo.
-2. Si la pregunta NO puede ser respondida con la informacion de la base de conocimiento, DEBES responder EXACTAMENTE: "Lo siento, no tengo información sobre eso en mi base de conocimiento. Solo puedo ayudarte con los temas que tengo documentados."
-3. NUNCA inventes, supongas o uses informacion externa que no este en la base de conocimiento.
-4. Si el usuario insiste en un tema que no esta en tu base de conocimiento, repite amablemente que no puedes ayudar con eso.
-5. Si encuentras la respuesta en la base de conocimiento, responde de forma clara y directa.
-
-=== BASE DE CONOCIMIENTO - ESTA ES TU UNICA FUENTE DE INFORMACION ===
+=== FRAGMENTOS RELEVANTES ===
 ${body}
-=== FIN DE BASE DE CONOCIMIENTO ===
+=== FIN DE FRAGMENTOS ===
+`;
 
-RECUERDA: Si no esta arriba, NO lo sabes. Responde que no tienes esa informacion.`;
-}
-
-function formatRankedContext(retrievedChunks: RetrievedChunk[]): string {
-  const body = retrievedChunks.length
-    ? retrievedChunks
-        .map(
-          (chunk) =>
-            `### ${chunk.title} (fragmento ${chunk.index + 1})\n${chunk.content}`,
-        )
-        .join("\n\n---\n\n")
-    : "No se encontraron fragmentos suficientemente relevantes para esta pregunta dentro de la base de conocimiento.";
-
-  return `
-
-=== INSTRUCCIONES CRITICAS - DEBES SEGUIRLAS SIEMPRE ===
-
-1. SOLO puedes responder usando los FRAGMENTOS RELEVANTES de la base de conocimiento que aparecen abajo.
-2. Si la pregunta NO puede ser respondida con esos fragmentos, DEBES responder EXACTAMENTE: "Lo siento, no tengo información sobre eso en mi base de conocimiento. Solo puedo ayudarte con los temas que tengo documentados."
-3. NUNCA inventes, supongas o uses informacion externa que no aparezca en los fragmentos recuperados.
-4. Si hay varias fuentes relevantes, combina la respuesta solo con lo que si este respaldado por esos fragmentos.
-5. Si el usuario pide algo fuera del material recuperado, responde con la frase exacta indicada arriba.
-
-=== FRAGMENTOS RELEVANTES DE LA BASE DE CONOCIMIENTO ===
-${body}
-=== FIN DE FRAGMENTOS RELEVANTES ===
-
-RECUERDA: Si no esta en los fragmentos mostrados arriba, NO lo sabes.`;
-}
-
-export function buildKnowledgeContext(
-  knowledgeItems: KnowledgeBaseItem[],
-  messages: MessageLike[],
-): KnowledgeContextResult {
-  if (knowledgeItems.length === 0) {
-    return {
-      context: "",
-      totalItems: 0,
-      totalChunks: 0,
-      selectedChunks: 0,
-      contextChars: 0,
-      strategy: "empty",
+    return { 
+      context, 
+      strategy: "vector", 
+      chunksFound: similarChunks.length 
     };
+  } catch (error) {
+    console.error("[RAG] Error in buildKnowledgeContext:", error);
+    return { context: "", strategy: "empty" };
   }
-
-  const totalChars = knowledgeItems.reduce((sum, item) => sum + item.content.length, 0);
-
-  if (totalChars <= FULL_CONTEXT_THRESHOLD) {
-    const context = formatAllItems(knowledgeItems);
-    return {
-      context,
-      totalItems: knowledgeItems.length,
-      totalChunks: knowledgeItems.length,
-      selectedChunks: knowledgeItems.length,
-      contextChars: context.length,
-      strategy: "full",
-    };
-  }
-
-  const chunks = buildChunks(knowledgeItems);
-  const query = buildRetrievalQuery(messages);
-  const selectedChunks = selectRelevantChunks(chunks, query);
-  const context = formatRankedContext(selectedChunks);
-
-  return {
-    context,
-    totalItems: knowledgeItems.length,
-    totalChunks: chunks.length,
-    selectedChunks: selectedChunks.length,
-    contextChars: context.length,
-    strategy: "ranked",
-  };
 }

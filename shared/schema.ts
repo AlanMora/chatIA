@@ -1,7 +1,24 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, timestamp, jsonb, boolean, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Custom vector type for pgvector
+const vector = customType<{ data: number[] }>({
+  dataType() {
+    return "vector(1536)"; // 1536 is the dimension for OpenAI embeddings
+  },
+  toDriver(value: number[]) {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: unknown) {
+    if (typeof value !== "string") return [];
+    return value
+      .replace(/[\[\]]/g, "")
+      .split(",")
+      .map(Number);
+  },
+});
 
 // Auth tables (users and sessions)
 export * from "./models/auth";
@@ -67,6 +84,25 @@ export const insertKnowledgeBaseItemSchema = createInsertSchema(knowledgeBaseIte
 
 export type InsertKnowledgeBaseItem = z.infer<typeof insertKnowledgeBaseItemSchema>;
 export type KnowledgeBaseItem = typeof knowledgeBaseItems.$inferSelect;
+
+// Knowledge Base Chunks (for Vector Search / RAG)
+export const knowledgeBaseChunks = pgTable("knowledge_base_chunks", {
+  id: serial("id").primaryKey(),
+  itemId: integer("item_id").references(() => knowledgeBaseItems.id, { onDelete: "cascade" }),
+  chatbotId: integer("chatbot_id").references(() => chatbots.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  embedding: vector("embedding"),
+  index: integer("index").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertKnowledgeBaseChunkSchema = createInsertSchema(knowledgeBaseChunks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertKnowledgeBaseChunk = z.infer<typeof insertKnowledgeBaseChunkSchema>;
+export type KnowledgeBaseChunk = typeof knowledgeBaseChunks.$inferSelect;
 
 // Widget conversations (for the embeddable widget)
 export const widgetConversations = pgTable("widget_conversations", {

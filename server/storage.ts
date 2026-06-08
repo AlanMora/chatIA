@@ -16,6 +16,8 @@ import type {
   InsertPredefinedResponse,
   Notification,
   InsertNotification,
+  KnowledgeBaseChunk,
+  InsertKnowledgeBaseChunk,
 } from "@shared/schema";
 import {
   chatbots,
@@ -25,6 +27,7 @@ import {
   conversationRatings,
   predefinedResponses,
   notifications,
+  knowledgeBaseChunks,
 } from "@shared/schema";
 
 export interface AnalyticsStats {
@@ -60,6 +63,12 @@ export interface IStorage {
   getKnowledgeBaseItemsByChatbot(chatbotId: number): Promise<KnowledgeBaseItem[]>;
   createKnowledgeBaseItem(item: InsertKnowledgeBaseItem): Promise<KnowledgeBaseItem>;
   deleteKnowledgeBaseItem(id: number): Promise<void>;
+
+  // Knowledge Base Chunks (RAG)
+  createKnowledgeBaseChunk(chunk: InsertKnowledgeBaseChunk): Promise<KnowledgeBaseChunk>;
+  createKnowledgeBaseChunks(chunks: InsertKnowledgeBaseChunk[]): Promise<KnowledgeBaseChunk[]>;
+  deleteKnowledgeBaseChunksByItem(itemId: number): Promise<void>;
+  searchSimilarChunks(chatbotId: number, queryEmbedding: number[], limit?: number): Promise<KnowledgeBaseChunk[]>;
 
   getWidgetConversation(id: number): Promise<WidgetConversation | undefined>;
   getWidgetConversationBySession(chatbotId: number, sessionId: string): Promise<WidgetConversation | undefined>;
@@ -165,6 +174,45 @@ export class DatabaseStorage implements IStorage {
 
   async deleteKnowledgeBaseItem(id: number): Promise<void> {
     await db.delete(knowledgeBaseItems).where(eq(knowledgeBaseItems.id, id));
+  }
+
+  // Knowledge Base Chunks (RAG)
+  async createKnowledgeBaseChunk(chunk: InsertKnowledgeBaseChunk): Promise<KnowledgeBaseChunk> {
+    const result = await db.insert(knowledgeBaseChunks).values(chunk).returning();
+    return result[0];
+  }
+
+  async createKnowledgeBaseChunks(chunks: InsertKnowledgeBaseChunk[]): Promise<KnowledgeBaseChunk[]> {
+    if (chunks.length === 0) return [];
+    return db.insert(knowledgeBaseChunks).values(chunks).returning();
+  }
+
+  async deleteKnowledgeBaseChunksByItem(itemId: number): Promise<void> {
+    await db.delete(knowledgeBaseChunks).where(eq(knowledgeBaseChunks.itemId, itemId));
+  }
+
+  async searchSimilarChunks(chatbotId: number, queryEmbedding: number[], limit: number = 5): Promise<KnowledgeBaseChunk[]> {
+    const embeddingStr = `[${queryEmbedding.join(",")}]`;
+    
+    // Using raw SQL for vector similarity because drizzle-orm's customType handling 
+    // for vector distance operators can be tricky.
+    const result = await db.execute(sql`
+      SELECT id, item_id as "itemId", chatbot_id as "chatbotId", content, embedding::text, index, created_at as "createdAt"
+      FROM knowledge_base_chunks
+      WHERE chatbot_id = ${chatbotId}
+      ORDER BY embedding <=> ${embeddingStr}::vector
+      LIMIT ${limit}
+    `);
+
+    return result.rows.map(row => ({
+      id: row.id as number,
+      itemId: row.itemId as number,
+      chatbotId: row.chatbotId as number,
+      content: row.content as string,
+      embedding: (row.embedding as string).replace(/[\[\]]/g, "").split(",").map(Number),
+      index: row.index as number,
+      createdAt: new Date(row.createdAt as string),
+    }));
   }
 
   async getWidgetConversation(id: number): Promise<WidgetConversation | undefined> {

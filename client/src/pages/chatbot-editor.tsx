@@ -40,7 +40,7 @@ import type { Chatbot } from "@shared/schema";
 const chatbotFormSchema = z.object({
   name: z.string().min(1, "El nombre es obligatorio").max(100),
   description: z.string().max(500).optional(),
-  systemPrompt: z.string().max(10000).optional(),
+  systemPrompt: z.string().max(100000).optional(),
   aiModel: z.string(),
   aiProvider: z.string(),
   customEndpoint: z.string().optional(),
@@ -657,7 +657,7 @@ export default function ChatbotEditor() {
                               />
                             </FormControl>
                             <FormDescription>
-                              Instrucciones que definen la personalidad y comportamiento del chatbot (máx. 10,000 caracteres)
+                              Instrucciones que definen la personalidad y comportamiento del chatbot (máx. 100,000 caracteres)
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
