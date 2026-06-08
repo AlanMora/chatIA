@@ -199,21 +199,23 @@ export async function buildKnowledgeContext(
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
     }
+// 3. Format the context with Sources
+const body = similarChunks
+  .map(chunk => `[FUENTE: ${chunk.sourceTitle}]: ${chunk.content}`)
+  .join("\n\n---\n\n");
 
-    const body = similarChunks
-      .map(chunk => `[Fragmento]: ${chunk.content}`)
-      .join("\n\n---\n\n");
+const context = `
+=== REGLAS DE ORO DE VERIFICACIÓN ===
+1. RESPONDE ÚNICAMENTE usando la información de los fragmentos proporcionados.
+2. CITADO OBLIGATORIO: Al final de cada frase o párrafo que use información del conocimiento, DEBES poner la fuente entre corchetes, por ejemplo: [Fuente: Manual_Procedimientos.pdf].
+3. Si la información NO está en los fragmentos, responde: "Lo siento, esa información no se encuentra en mis documentos oficiales."
+4. PROHIBIDO: No uses conocimiento general, no inventes datos, no supongas nada que no esté escrito abajo.
 
-    const context = `
-=== INSTRUCCIONES CRITICAS ===
-1. SOLO puedes responder usando la informacion de los FRAGMENTOS RELEVANTES de abajo.
-2. Si la respuesta no esta en los fragmentos, di: "Lo siento, no tengo esa información en mi base de conocimiento."
-3. NUNCA inventes informacion.
-
-=== FRAGMENTOS RELEVANTES ===
+=== FRAGMENTOS DE CONOCIMIENTO (FUENTES OFICIALES) ===
 ${body}
 === FIN DE FRAGMENTOS ===
 `;
+
 
     return { 
       context, 

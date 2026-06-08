@@ -191,16 +191,23 @@ export class DatabaseStorage implements IStorage {
     await db.delete(knowledgeBaseChunks).where(eq(knowledgeBaseChunks.itemId, itemId));
   }
 
-  async searchSimilarChunks(chatbotId: number, queryEmbedding: number[], limit: number = 5): Promise<KnowledgeBaseChunk[]> {
+  async searchSimilarChunks(chatbotId: number, queryEmbedding: number[], limit: number = 5): Promise<(KnowledgeBaseChunk & { sourceTitle: string })[]> {
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
     
-    // Using raw SQL for vector similarity because drizzle-orm's customType handling 
-    // for vector distance operators can be tricky.
     const result = await db.execute(sql`
-      SELECT id, item_id as "itemId", chatbot_id as "chatbotId", content, embedding::text, index, created_at as "createdAt"
-      FROM knowledge_base_chunks
-      WHERE chatbot_id = ${chatbotId}
-      ORDER BY embedding <=> ${embeddingStr}::vector
+      SELECT 
+        kbc.id, 
+        kbc.item_id as "itemId", 
+        kbc.chatbot_id as "chatbotId", 
+        kbc.content, 
+        kbc.embedding::text, 
+        kbc.index, 
+        kbc.created_at as "createdAt",
+        kbi.title as "sourceTitle"
+      FROM knowledge_base_chunks kbc
+      JOIN knowledge_base_items kbi ON kbc.item_id = kbi.id
+      WHERE kbc.chatbot_id = ${chatbotId}
+      ORDER BY kbc.embedding <=> ${embeddingStr}::vector
       LIMIT ${limit}
     `);
 
@@ -212,6 +219,7 @@ export class DatabaseStorage implements IStorage {
       embedding: (row.embedding as string).replace(/[\[\]]/g, "").split(",").map(Number),
       index: row.index as number,
       createdAt: new Date(row.createdAt as string),
+      sourceTitle: row.sourceTitle as string,
     }));
   }
 
