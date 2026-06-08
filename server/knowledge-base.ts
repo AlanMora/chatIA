@@ -12,6 +12,7 @@ export type KnowledgeContextResult = {
   context: string;
   strategy: "empty" | "full" | "vector";
   chunksFound?: number;
+  sources?: string[];
 };
 
 const CHUNK_SIZE = 1000;
@@ -83,7 +84,6 @@ async function generateEmbedding(text: string, chatbot: any): Promise<number[]> 
 
     } else {
       // Default: OpenAI
-      // IMPORTANTE: Priorizamos la llave del chatbot
       const apiKey = chatbot.openaiApiKey || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
       
       if (!apiKey || apiKey === "Missing Key") {
@@ -148,7 +148,6 @@ export async function processKnowledgeItem(item: KnowledgeBaseItem): Promise<voi
   const chunks = splitIntoChunks(item.content);
   const chunksWithEmbeddings: any[] = [];
   
-  // Procesamiento secuencial controlado para asegurar que cada uno use la llave correcta
   for (let i = 0; i < chunks.length; i++) {
     const content = chunks[i];
     try {
@@ -199,7 +198,7 @@ export async function buildKnowledgeContext(
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
     }
-    // 3. Format the context
+
     const body = similarChunks
       .map(chunk => `[DOCUMENTO: ${chunk.sourceTitle}]: ${chunk.content}`)
       .join("\n\n---\n\n");
@@ -227,10 +226,6 @@ ${body}
     };
   } catch (error) {
     console.error("[RAG] Error in buildKnowledgeContext:", error);
-    return { context: "", strategy: "empty" };
-  }
-}
-] Error in buildKnowledgeContext:", error);
     return { context: "", strategy: "empty" };
   }
 }
