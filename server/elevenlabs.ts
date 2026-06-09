@@ -295,17 +295,20 @@ export async function registerElevenLabsRoutes(app: Express): Promise<void> {
       
       try {
         if (ext === ".txt") {
-          content = fs.readFileSync(filePath, "utf-8");
+          content = fs.readFileSync(filePath!, "utf-8");
         } else if (ext === ".pdf") {
-          // @ts-ignore - dynamic import
-          const pdfParseModule = await import("pdf-parse");
-          const pdfParse = pdfParseModule.default || pdfParseModule;
-          const dataBuffer = fs.readFileSync(filePath);
-          const pdfData = await pdfParse(dataBuffer);
-          content = pdfData.text;
+          const { PDFParse } = await import("pdf-parse");
+          const dataBuffer = fs.readFileSync(filePath!);
+          const parser = new PDFParse({ data: dataBuffer });
+          try {
+            const pdfData = await parser.getText();
+            content = pdfData.text;
+          } finally {
+            await parser.destroy().catch(() => {});
+          }
         } else if (ext === ".doc" || ext === ".docx") {
           const mammoth = await import("mammoth");
-          const result = await mammoth.extractRawText({ path: filePath });
+          const result = await mammoth.extractRawText({ path: filePath! });
           content = result.value;
         }
       } finally {

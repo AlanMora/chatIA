@@ -27,7 +27,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Save, Eye, Upload, X, ImageIcon, Mic, Play, UserCheck, MessageSquare } from "lucide-react";
+import { ArrowLeft, Save, Eye, Upload, X, ImageIcon, Mic, Play, UserCheck, MessageSquare, Wrench } from "lucide-react";
 import { Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +39,7 @@ import type { Chatbot } from "@shared/schema";
 
 const chatbotFormSchema = z.object({
   name: z.string().min(1, "El nombre es obligatorio").max(100),
-  description: z.string().max(500).optional(),
+  description: z.string().max(1500).optional(),
   systemPrompt: z.string().max(100000).optional(),
   aiModel: z.string(),
   aiProvider: z.string(),
@@ -48,10 +48,14 @@ const chatbotFormSchema = z.object({
   customModelName: z.string().optional(),
   openaiApiKey: z.string().optional(),
   geminiApiKey: z.string().optional(),
+  embeddingProvider: z.string().optional(),
+  embeddingModel: z.string().optional(),
+  embeddingDimensions: z.coerce.number().min(1).max(1536).optional(),
+  embeddingBaseUrl: z.string().optional(),
   primaryColor: z.string(),
   textColor: z.string(),
   position: z.string(),
-  welcomeMessage: z.string().max(500).optional(),
+  welcomeMessage: z.string().max(3000).optional(),
   temperature: z.string(),
   maxTokens: z.coerce.number().min(100).max(8192),
   isActive: z.boolean(),
@@ -63,6 +67,41 @@ const chatbotFormSchema = z.object({
 
 type ChatbotFormValues = z.infer<typeof chatbotFormSchema>;
 
+type ModelCatalogItem = {
+  id: string;
+  label: string;
+  provider: string;
+  type: "chat" | "embedding";
+  dimensions?: number;
+  isDefault?: boolean;
+  notes?: string;
+};
+
+type CapabilityItem = {
+  id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  permission?: string | null;
+  requiresConfirmation?: boolean | null;
+  isActive?: boolean | null;
+};
+
+type ToolLogItem = {
+  id: number;
+  toolId?: string | null;
+  status?: string | null;
+  createdAt: string;
+};
+
+type CapabilitiesResponse = {
+  skills: CapabilityItem[];
+  tools: CapabilityItem[];
+  enabledSkillIds: string[];
+  enabledToolIds: string[];
+  recentToolLogs: ToolLogItem[];
+};
+
 const AI_MODELS = [
   // Modelos GRATUITOS (OpenRouter)
   { value: "deepseek/deepseek-r1-0528:free", label: "DeepSeek R1 (Gratis)", provider: "openrouter" },
@@ -72,6 +111,11 @@ const AI_MODELS = [
   { value: "nvidia/nemotron-nano-9b-v2:free", label: "Nemotron Nano 9B (Gratis)", provider: "openrouter" },
   { value: "openai/gpt-oss-20b:free", label: "GPT OSS 20B (Gratis)", provider: "openrouter" },
   // OpenAI (Premium)
+  { value: "gpt-5.5", label: "GPT-5.5", provider: "openai" },
+  { value: "gpt-5.4", label: "GPT-5.4", provider: "openai" },
+  { value: "gpt-5.4-mini", label: "GPT-5.4 Mini (Rápido)", provider: "openai" },
+  { value: "gpt-5.3-codex", label: "GPT-5.3 Codex", provider: "openai" },
+  { value: "gpt-5.2", label: "GPT-5.2", provider: "openai" },
   { value: "gpt-5", label: "GPT-5 (Premium)", provider: "openai" },
   { value: "gpt-5.1", label: "GPT-5.1", provider: "openai" },
   { value: "gpt-4o", label: "GPT-4o", provider: "openai" },
@@ -85,12 +129,44 @@ const AI_MODELS = [
   { value: "custom", label: "Modelo Personalizado (Self-Hosted)", provider: "custom" },
 ];
 
+const EMBEDDING_MODELS = [
+  { value: "text-embedding-3-small", label: "OpenAI text-embedding-3-small", provider: "openai", dimensions: 1536 },
+  { value: "text-embedding-3-large", label: "OpenAI text-embedding-3-large a 1536 dims", provider: "openai", dimensions: 1536 },
+  { value: "nomic-embed-text", label: "Ollama nomic-embed-text", provider: "ollama", dimensions: 1536 },
+  { value: "all-minilm:l6-v2", label: "Ollama all-minilm:l6-v2", provider: "ollama", dimensions: 1536 },
+];
+
 const POSITIONS = [
   { value: "bottom-right", label: "Abajo Derecha" },
   { value: "bottom-left", label: "Abajo Izquierda" },
   { value: "top-right", label: "Arriba Derecha" },
   { value: "top-left", label: "Arriba Izquierda" },
 ];
+
+const DEFAULT_DESCRIPTION =
+  "Asistente virtual institucional del DIF Zapopan para orientar a la ciudadania sobre tramites, servicios, programas, talleres y apoyos disponibles. Ayuda a encontrar el servicio correcto, muestra opciones por tema o grupo de atencion y permite consultar informacion por apartados como requisitos, costos, horarios, lugar y contacto.";
+
+const DEFAULT_WELCOME_MESSAGE = `Hola, soy SofIA, asistente virtual del DIF Zapopan.
+
+Puedo orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles.
+
+Puedes usarme asi:
+
+1. Escribe el tramite o servicio que buscas.
+   Ejemplo: platicas prematrimoniales, INAPAM, ayuda alimentaria.
+
+2. Pide un listado por tema o grupo de atencion.
+   Ejemplo: servicios para personas mayores, apoyos alimentarios, talleres deportivos.
+
+3. Cuando elijas un servicio, puedo mostrarte solo el apartado que necesitas:
+   requisitos, costos, horarios, lugar y contacto, o ficha completa.
+
+Elige una opcion o escribe tu pregunta:
+
+1. Buscar un tramite o servicio
+2. No se que necesito
+3. Ver por grupo de atencion
+4. Ver programas o talleres`;
 
 export default function ChatbotEditor() {
   const { toast } = useToast();
@@ -104,11 +180,35 @@ export default function ChatbotEditor() {
     enabled: !isNew && !!chatbotId,
   });
 
+  const { data: modelCatalog } = useQuery<ModelCatalogItem[]>({
+    queryKey: ["/api/model-catalog"],
+  });
+
+  const { data: capabilities } = useQuery<CapabilitiesResponse>({
+    queryKey: ["/api/chatbots", chatbotId, "capabilities"],
+    enabled: !isNew && !!chatbotId,
+  });
+
+  const chatModels = modelCatalog?.filter((model) => model.type === "chat") || AI_MODELS.map((model) => ({
+    id: model.value,
+    label: model.label,
+    provider: model.provider,
+    type: "chat" as const,
+  }));
+
+  const embeddingModels = modelCatalog?.filter((model) => model.type === "embedding") || EMBEDDING_MODELS.map((model) => ({
+    id: model.value,
+    label: model.label,
+    provider: model.provider,
+    type: "embedding" as const,
+    dimensions: model.dimensions,
+  }));
+
   const form = useForm<ChatbotFormValues>({
     resolver: zodResolver(chatbotFormSchema),
     defaultValues: {
       name: "",
-      description: "",
+      description: DEFAULT_DESCRIPTION,
       systemPrompt: "Eres un asistente útil.",
       aiModel: "gpt-5",
       aiProvider: "openai",
@@ -117,10 +217,14 @@ export default function ChatbotEditor() {
       customModelName: "",
       openaiApiKey: "",
       geminiApiKey: "",
+      embeddingProvider: "openai",
+      embeddingModel: "text-embedding-3-small",
+      embeddingDimensions: 1536,
+      embeddingBaseUrl: "",
       primaryColor: "#3B82F6",
       textColor: "#FFFFFF",
       position: "bottom-right",
-      welcomeMessage: "¡Hola! ¿En qué puedo ayudarte?",
+      welcomeMessage: DEFAULT_WELCOME_MESSAGE,
       temperature: "0.7",
       maxTokens: 1024,
       isActive: true,
@@ -140,10 +244,14 @@ export default function ChatbotEditor() {
       customModelName: chatbot.customModelName || "",
       openaiApiKey: (chatbot as any).openaiApiKey || "",
       geminiApiKey: (chatbot as any).geminiApiKey || "",
+      embeddingProvider: (chatbot as any).embeddingProvider || "openai",
+      embeddingModel: (chatbot as any).embeddingModel || "text-embedding-3-small",
+      embeddingDimensions: (chatbot as any).embeddingDimensions || 1536,
+      embeddingBaseUrl: (chatbot as any).embeddingBaseUrl || "",
       primaryColor: chatbot.primaryColor || "#3B82F6",
       textColor: chatbot.textColor || "#FFFFFF",
       position: chatbot.position || "bottom-right",
-      welcomeMessage: chatbot.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
+      welcomeMessage: chatbot.welcomeMessage || DEFAULT_WELCOME_MESSAGE,
       temperature: chatbot.temperature || "0.7",
       maxTokens: chatbot.maxTokens || 1024,
       isActive: chatbot.isActive ?? true,
@@ -275,6 +383,27 @@ export default function ChatbotEditor() {
     },
   });
 
+  const capabilitiesMutation = useMutation({
+    mutationFn: async (data: { skillIds: string[]; toolIds: string[] }) => {
+      const response = await apiRequest("PATCH", `/api/chatbots/${chatbotId}/capabilities`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chatbots", chatbotId, "capabilities"] });
+      toast({
+        title: "Capacidades actualizadas",
+        description: "Skills y tools del chatbot guardadas.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudieron actualizar las capacidades.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: ChatbotFormValues) => {
     if (isNew) {
       createMutation.mutate(data);
@@ -284,6 +413,22 @@ export default function ChatbotEditor() {
   };
 
   const watchedValues = form.watch();
+
+  const toggleSkill = (skillId: string) => {
+    if (!capabilities || !chatbotId) return;
+    const skillIds = capabilities.enabledSkillIds.includes(skillId)
+      ? capabilities.enabledSkillIds.filter((id) => id !== skillId)
+      : [...capabilities.enabledSkillIds, skillId];
+    capabilitiesMutation.mutate({ skillIds, toolIds: capabilities.enabledToolIds });
+  };
+
+  const toggleTool = (toolId: string) => {
+    if (!capabilities || !chatbotId) return;
+    const toolIds = capabilities.enabledToolIds.includes(toolId)
+      ? capabilities.enabledToolIds.filter((id) => id !== toolId)
+      : [...capabilities.enabledToolIds, toolId];
+    capabilitiesMutation.mutate({ skillIds: capabilities.enabledSkillIds, toolIds });
+  };
 
   if (!isNew && isLoading) {
     return (
@@ -357,6 +502,10 @@ export default function ChatbotEditor() {
                     <MessageSquare className="mr-1 h-3 w-3" />
                     Respuestas
                   </TabsTrigger>
+                  <TabsTrigger value="capabilities" className="flex-1" data-testid="tab-capabilities">
+                    <Wrench className="mr-1 h-3 w-3" />
+                    Skills
+                  </TabsTrigger>
                   {ELEVENLABS_VOICE_ENABLED && (
                     <TabsTrigger value="voice" className="flex-1" data-testid="tab-voice">
                       <Mic className="mr-1 h-3 w-3" />
@@ -394,14 +543,14 @@ export default function ChatbotEditor() {
                             <FormLabel>Descripción</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="Un asistente útil para..."
+                                placeholder={DEFAULT_DESCRIPTION}
                                 className="resize-none"
                                 {...field}
                                 data-testid="input-description"
                               />
                             </FormControl>
                             <FormDescription>
-                              Breve descripción de lo que hace este chatbot
+                              Describe el alcance del asistente. Maximo 1500 caracteres.
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -416,14 +565,14 @@ export default function ChatbotEditor() {
                             <FormLabel>Mensaje de Bienvenida</FormLabel>
                             <FormControl>
                               <Textarea
-                                placeholder="¡Hola! ¿En qué puedo ayudarte?"
+                                placeholder={DEFAULT_WELCOME_MESSAGE}
                                 className="resize-none"
                                 {...field}
                                 data-testid="input-welcome"
                               />
                             </FormControl>
                             <FormDescription>
-                              Primer mensaje que se muestra al abrir el chat
+                              Primer mensaje que se muestra al abrir el chat. Maximo 3000 caracteres.
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -471,7 +620,7 @@ export default function ChatbotEditor() {
                             <Select 
                               onValueChange={(value) => {
                                 field.onChange(value);
-                                const selectedModel = AI_MODELS.find(m => m.value === value);
+                                const selectedModel = chatModels.find(m => m.id === value);
                                 if (selectedModel) {
                                   form.setValue("aiProvider", selectedModel.provider);
                                 }
@@ -485,26 +634,26 @@ export default function ChatbotEditor() {
                               </FormControl>
                               <SelectContent>
                                 <div className="px-2 py-1.5 text-xs font-semibold text-green-600 dark:text-green-400">Modelos Gratuitos</div>
-                                {AI_MODELS.filter(m => m.provider === "openrouter").map((model) => (
-                                  <SelectItem key={model.value} value={model.value}>
+                                {chatModels.filter(m => m.provider === "openrouter").map((model) => (
+                                  <SelectItem key={model.id} value={model.id}>
                                     {model.label}
                                   </SelectItem>
                                 ))}
                                 <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">OpenAI (Premium)</div>
-                                {AI_MODELS.filter(m => m.provider === "openai").map((model) => (
-                                  <SelectItem key={model.value} value={model.value}>
+                                {chatModels.filter(m => m.provider === "openai").map((model) => (
+                                  <SelectItem key={model.id} value={model.id}>
                                     {model.label}
                                   </SelectItem>
                                 ))}
                                 <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Google Gemini (Premium)</div>
-                                {AI_MODELS.filter(m => m.provider === "gemini").map((model) => (
-                                  <SelectItem key={model.value} value={model.value}>
+                                {chatModels.filter(m => m.provider === "gemini").map((model) => (
+                                  <SelectItem key={model.id} value={model.id}>
                                     {model.label}
                                   </SelectItem>
                                 ))}
                                 <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Modelo Propio</div>
-                                {AI_MODELS.filter(m => m.provider === "custom").map((model) => (
-                                  <SelectItem key={model.value} value={model.value}>
+                                {chatModels.filter(m => m.provider === "custom").map((model) => (
+                                  <SelectItem key={model.id} value={model.id}>
                                     {model.label}
                                   </SelectItem>
                                 ))}
@@ -641,6 +790,122 @@ export default function ChatbotEditor() {
                           />
                         </div>
                       )}
+
+                      <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
+                        <div>
+                          <div className="text-sm font-medium">Embeddings para base de conocimiento</div>
+                          <p className="text-sm text-muted-foreground">
+                            Define como se generan los vectores RAG al cargar documentos. La base actual usa 1536 dimensiones.
+                          </p>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <FormField
+                            control={form.control}
+                            name="embeddingProvider"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Proveedor de embedding</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || "openai"}>
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-embedding-provider">
+                                      <SelectValue placeholder="Selecciona proveedor" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="openai">OpenAI</SelectItem>
+                                    <SelectItem value="ollama">Ollama</SelectItem>
+                                    <SelectItem value="chatbot">Proveedor del chatbot</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="embeddingModel"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Modelo de embedding</FormLabel>
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value);
+                                    const selectedEmbedding = embeddingModels.find((model) => model.id === value);
+                                    if (selectedEmbedding) {
+                                      form.setValue("embeddingProvider", selectedEmbedding.provider);
+                                      form.setValue("embeddingDimensions", selectedEmbedding.dimensions || 1536);
+                                    }
+                                  }}
+                                  value={field.value || "text-embedding-3-small"}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-embedding-model">
+                                      <SelectValue placeholder="Selecciona modelo de embedding" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">OpenAI</div>
+                                    {embeddingModels.filter(model => model.provider === "openai").map((model) => (
+                                      <SelectItem key={model.id} value={model.id}>
+                                        {model.label}
+                                      </SelectItem>
+                                    ))}
+                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-2">Ollama</div>
+                                    {embeddingModels.filter(model => model.provider === "ollama").map((model) => (
+                                      <SelectItem key={model.id} value={model.id}>
+                                        {model.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <FormField
+                            control={form.control}
+                            name="embeddingDimensions"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Dimensiones</FormLabel>
+                                <FormControl>
+                                  <Input type="number" {...field} data-testid="input-embedding-dimensions" />
+                                </FormControl>
+                                <FormDescription>
+                                  Mantener 1536 para compatibilidad con pgvector actual.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="embeddingBaseUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Base URL Ollama</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="http://192.168.8.82:11434"
+                                    {...field}
+                                    data-testid="input-embedding-base-url"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Solo aplica si el proveedor es Ollama.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
 
                       <FormField
                         control={form.control}
@@ -961,6 +1226,97 @@ export default function ChatbotEditor() {
                   )}
                 </TabsContent>
 
+                <TabsContent value="capabilities" className="mt-4 space-y-4">
+                  {isNew && (
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center text-muted-foreground">
+                          <Wrench className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                          <p>Guarda el chatbot primero para configurar skills y tools.</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {!isNew && capabilities && (
+                    <>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Skills del agente</CardTitle>
+                          <CardDescription>
+                            Reglas de comportamiento habilitadas para este chatbot.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {capabilities.skills.map((skill) => (
+                            <div key={skill.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                              <div>
+                                <p className="font-medium">{skill.name}</p>
+                                <p className="text-sm text-muted-foreground">{skill.description}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Categoria: {skill.category || "general"}</p>
+                              </div>
+                              <Switch
+                                checked={capabilities.enabledSkillIds.includes(skill.id)}
+                                onCheckedChange={() => toggleSkill(skill.id)}
+                                disabled={capabilitiesMutation.isPending}
+                                data-testid={`switch-skill-${skill.id}`}
+                              />
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Tools disponibles</CardTitle>
+                          <CardDescription>
+                            Acciones controladas que el agente puede usar o solicitar. Las sensibles requieren confirmacion.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {capabilities.tools.map((tool) => (
+                            <div key={tool.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                              <div>
+                                <p className="font-medium">{tool.name}</p>
+                                <p className="text-sm text-muted-foreground">{tool.description}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Permiso: {tool.permission || "read"} · Confirmacion: {tool.requiresConfirmation ? "si" : "no"}
+                                </p>
+                              </div>
+                              <Switch
+                                checked={capabilities.enabledToolIds.includes(tool.id)}
+                                onCheckedChange={() => toggleTool(tool.id)}
+                                disabled={capabilitiesMutation.isPending}
+                                data-testid={`switch-tool-${tool.id}`}
+                              />
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Auditoria reciente</CardTitle>
+                          <CardDescription>Ultimas ejecuciones registradas de tools.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {capabilities.recentToolLogs.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Aun no hay ejecuciones registradas.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {capabilities.recentToolLogs.map((log) => (
+                                <div key={log.id} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                                  <span>{log.toolId}</span>
+                                  <span className="text-muted-foreground">{log.status}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+                </TabsContent>
+
                 {ELEVENLABS_VOICE_ENABLED && (
                   <TabsContent value="voice" className="mt-4 space-y-4">
                     <Card>
@@ -1038,10 +1394,14 @@ export default function ChatbotEditor() {
                     customModelName: watchedValues.customModelName || null,
                     openaiApiKey: watchedValues.openaiApiKey || null,
                     geminiApiKey: watchedValues.geminiApiKey || null,
+                    embeddingProvider: watchedValues.embeddingProvider || "openai",
+                    embeddingModel: watchedValues.embeddingModel || "text-embedding-3-small",
+                    embeddingDimensions: watchedValues.embeddingDimensions || 1536,
+                    embeddingBaseUrl: watchedValues.embeddingBaseUrl || null,
                     primaryColor: watchedValues.primaryColor || "#3B82F6",
                     textColor: watchedValues.textColor || "#FFFFFF",
                     position: watchedValues.position || "bottom-right",
-                    welcomeMessage: watchedValues.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
+                    welcomeMessage: watchedValues.welcomeMessage || DEFAULT_WELCOME_MESSAGE,
                     temperature: watchedValues.temperature || "0.7",
                     maxTokens: watchedValues.maxTokens || 1024,
                     isActive: watchedValues.isActive ?? true,

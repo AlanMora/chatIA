@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY package.json package-lock.json ./
 
-RUN npm ci && npm install pdf-parse@1.1.1 --save-exact --ignore-scripts
+RUN npm ci
 
 COPY . .
 RUN npm run build
@@ -31,6 +31,8 @@ COPY --from=build /app/node_modules ./node_modules
 # Copiar archivos de la aplicacion
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/shared ./shared
+COPY --from=build /app/script ./script
+COPY --from=build /app/seed ./seed
 COPY --from=build /app/drizzle.config.ts ./
 
 RUN mkdir -p /app/uploads

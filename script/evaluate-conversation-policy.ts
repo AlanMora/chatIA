@@ -1,0 +1,257 @@
+import {
+  buildRuntimeSystemPrompt,
+  classifyConversationIntent,
+  deriveConversationState,
+  extractServiceOptionsFromList,
+  buildAmbiguousHelpResponse,
+  getDeterministicWidgetResponse,
+  type ConversationIntent,
+  type ConversationMessage,
+  type ConversationState,
+} from "../server/conversation-policy";
+
+type IntentCase = {
+  name: string;
+  input: string;
+  expected: ConversationIntent;
+  messages?: ConversationMessage[];
+};
+
+type ResponseCase = {
+  name: string;
+  messages: ConversationMessage[];
+  includes: string[];
+  excludes: string[];
+};
+
+type StateCase = {
+  name: string;
+  input: string;
+  expected: ConversationState;
+  messages?: ConversationMessage[];
+};
+
+const cemamList = `Servicios ofrecidos en el CEMAM:
+
+1. Servicios Basicos y Asistenciales
+2. Desarrollo de Habilidades Productivas y Emprendurismo
+3. Solicitud de Visita Escolar al CEMAM
+4. Reporte de Personas Mayores en Situacion de Vulnerabilidad
+5. Afiliacion al INAPAM
+
+Cual de estos servicios te interesa consultar? Puedes escribir el numero o el nombre del servicio.`;
+
+const sectionMenu = `Afiliacion al INAPAM
+
+Que informacion quieres conocer?
+
+1. En que consiste
+2. A quien va dirigido
+3. Requisitos
+4. Costos
+5. Horario, vigencia o convocatoria
+6. Lugar y contacto
+7. Nota importante
+8. Ficha completa
+
+Puedes escribir el numero o el apartado.`;
+
+const intentCases: IntentCase[] = [
+  { name: "listado CEMAM", input: "que tramites y/o servicios hay en el CEMAM", expected: "list" },
+  { name: "listado ayuda alimentaria", input: "Qué servicios hay sobre ayuda alimentaria", expected: "list" },
+  { name: "listado programas", input: "ver programas", expected: "list" },
+  { name: "ayuda general", input: "No sé qué necesito", expected: "general_help" },
+  { name: "servicio directo INAPAM", input: "Afiliación al INAPAM", expected: "direct_service" },
+  { name: "servicio directo prematrimonial", input: "platicas prematrimoniales", expected: "direct_service" },
+  { name: "servicio directo taller", input: "Taller de serigrafía", expected: "direct_service" },
+  { name: "apartado requisitos", input: "requisitos", expected: "section_request" },
+  { name: "apartado costo", input: "cuanto cuesta", expected: "section_request" },
+  { name: "apartado horario", input: "horario de atención", expected: "section_request" },
+  { name: "apartado lugar", input: "donde queda", expected: "section_request" },
+  { name: "ficha completa", input: "dame la ficha completa", expected: "complete_record" },
+  { name: "todos los datos", input: "quiero todos los datos", expected: "complete_record" },
+  { name: "saludo ambiguo", input: "hola", expected: "ambiguous" },
+  { name: "ayuda ambigua", input: "ayuda", expected: "ambiguous" },
+  { name: "informacion complementaria", input: "que es el DIF", expected: "complementary" },
+  { name: "fuera de alcance", input: "como tramito mi pasaporte", expected: "out_of_scope" },
+  { name: "emergencia", input: "hay una emergencia y peligro inmediato", expected: "emergency" },
+  { name: "contacto humano", input: "quiero hablar con una persona real", expected: "human_handoff" },
+  {
+    name: "seleccion numerica desde listado",
+    input: "5",
+    expected: "service_selection",
+    messages: [
+      { role: "assistant", content: cemamList },
+      { role: "user", content: "5" },
+    ],
+  },
+  {
+    name: "numero desde menu es solicitud de apartado",
+    input: "4",
+    expected: "section_request",
+    messages: [
+      { role: "assistant", content: sectionMenu },
+      { role: "user", content: "4" },
+    ],
+  },
+];
+
+const responseCases: ResponseCase[] = [
+  {
+    name: "seleccion numerica devuelve menu",
+    messages: [
+      { role: "assistant", content: cemamList },
+      { role: "user", content: "5" },
+    ],
+    includes: ["Afiliacion al INAPAM", "Que informacion quieres conocer?", "8. Ficha completa"],
+    excludes: ["Proceso para inscribir", "Documentacion requerida", "Servicio gratuito"],
+  },
+  {
+    name: "servicio directo devuelve menu",
+    messages: [{ role: "user", content: "Afiliación al INAPAM" }],
+    includes: ["Afiliación al INAPAM", "Que informacion quieres conocer?", "3. Requisitos"],
+    excludes: ["Proceso para inscribir", "Adultos mayores", "Servicio gratuito"],
+  },
+  {
+    name: "directo prematrimonial devuelve menu",
+    messages: [{ role: "user", content: "platicas prematrimoniales" }],
+    includes: ["platicas prematrimoniales", "Que informacion quieres conocer?", "4. Costos"],
+    excludes: ["Cuota aproximada", "actas de nacimiento", "comprobante de transferencia"],
+  },
+  {
+    name: "numero desde menu no genera respuesta deterministica",
+    messages: [
+      { role: "assistant", content: sectionMenu },
+      { role: "user", content: "4" },
+    ],
+    includes: [],
+    excludes: [],
+  },
+  {
+    name: "listado amplio no se intercepta como servicio directo",
+    messages: [{ role: "user", content: "que servicios hay en el CEMAM" }],
+    includes: [],
+    excludes: [],
+  },
+  {
+    name: "saludo devuelve orientacion UX",
+    messages: [{ role: "user", content: "hola" }],
+    includes: ["Para orientarte mejor", "Buscar un tramite o servicio", "Ver programas o talleres"],
+    excludes: ["No encontre ese dato", "Ficha completa"],
+  },
+  {
+    name: "complementaria evita inventar",
+    messages: [{ role: "user", content: "que es el DIF" }],
+    includes: ["orientacion general", "tramite, servicio, programa, taller o apoyo"],
+    excludes: ["Presidencia", "requisitos"],
+  },
+  {
+    name: "fuera de alcance redirige",
+    messages: [{ role: "user", content: "como tramito mi pasaporte" }],
+    includes: ["Solo puedo orientar", "dependencia oficial correspondiente"],
+    excludes: ["requisitos del pasaporte", "costo del pasaporte"],
+  },
+  {
+    name: "emergencia deriva a 911",
+    messages: [{ role: "user", content: "hay una emergencia con peligro inmediato" }],
+    includes: ["llama al 911", "no sustituyo atencion de emergencia"],
+    excludes: ["ficha completa", "requisitos"],
+  },
+  {
+    name: "contacto humano pide tema",
+    messages: [{ role: "user", content: "quiero hablar con una persona real" }],
+    includes: ["Para atencion con una persona", "Adultos mayores", "Ayuda alimentaria"],
+    excludes: ["No encontre ese dato", "911"],
+  },
+];
+
+const stateCases: StateCase[] = [
+  { name: "estado listado", input: "que servicios hay en el CEMAM", expected: "searching_service" },
+  { name: "estado servicio directo", input: "Afiliacion al INAPAM", expected: "service_selected" },
+  {
+    name: "estado apartado",
+    input: "4",
+    expected: "section_selected",
+    messages: [
+      { role: "assistant", content: sectionMenu },
+      { role: "user", content: "4" },
+    ],
+  },
+  { name: "estado fuera de alcance", input: "como tramito mi pasaporte", expected: "out_of_scope" },
+  { name: "estado contacto humano", input: "quiero hablar con una persona real", expected: "requires_human" },
+  { name: "estado emergencia", input: "hay peligro inmediato", expected: "emergency" },
+];
+
+function assert(condition: boolean, message: string) {
+  if (!condition) throw new Error(message);
+}
+
+let passed = 0;
+let failed = 0;
+
+for (const testCase of intentCases) {
+  try {
+    const messages = testCase.messages || [{ role: "user", content: testCase.input }];
+    const actual = classifyConversationIntent(testCase.input, messages);
+    assert(actual === testCase.expected, `${testCase.name}: esperado ${testCase.expected}, recibido ${actual}`);
+    passed += 1;
+  } catch (error) {
+    failed += 1;
+    console.error(`FAIL intent - ${testCase.name}: ${(error as Error).message}`);
+  }
+}
+
+for (const testCase of responseCases) {
+  try {
+    const actual = getDeterministicWidgetResponse(testCase.messages);
+    if (testCase.includes.length === 0 && testCase.excludes.length === 0) {
+      assert(actual === null, `${testCase.name}: esperado null, recibido ${actual}`);
+    } else {
+      assert(typeof actual === "string", `${testCase.name}: esperado respuesta deterministica`);
+      for (const expectedText of testCase.includes) {
+        assert(actual!.includes(expectedText), `${testCase.name}: falta "${expectedText}"`);
+      }
+      for (const forbiddenText of testCase.excludes) {
+        assert(!actual!.includes(forbiddenText), `${testCase.name}: no debe incluir "${forbiddenText}"`);
+      }
+    }
+    passed += 1;
+  } catch (error) {
+    failed += 1;
+    console.error(`FAIL response - ${testCase.name}: ${(error as Error).message}`);
+  }
+}
+
+for (const testCase of stateCases) {
+  try {
+    const messages = testCase.messages || [{ role: "user", content: testCase.input }];
+    const actual = deriveConversationState(testCase.input, messages);
+    assert(actual === testCase.expected, `${testCase.name}: esperado ${testCase.expected}, recibido ${actual}`);
+    passed += 1;
+  } catch (error) {
+    failed += 1;
+    console.error(`FAIL state - ${testCase.name}: ${(error as Error).message}`);
+  }
+}
+
+try {
+  const options = extractServiceOptionsFromList(cemamList);
+  assert(options.length === 5, `extractServiceOptionsFromList: esperado 5, recibido ${options.length}`);
+  assert(options[4] === "Afiliacion al INAPAM", "extractServiceOptionsFromList: opcion 5 incorrecta");
+
+  const runtimePrompt = buildRuntimeSystemPrompt("Prompt base", "Contexto RAG");
+  assert(runtimePrompt.includes("POLITICA RUNTIME DE CONVERSACION"), "runtime prompt sin politica");
+  assert(runtimePrompt.includes("Contexto RAG"), "runtime prompt sin contexto RAG");
+  assert(runtimePrompt.includes("consulta es ambigua"), "runtime prompt sin politica UX ambigua");
+  assert(buildAmbiguousHelpResponse().includes("Buscar un tramite o servicio"), "respuesta ambigua sin opciones");
+  passed += 3;
+} catch (error) {
+  failed += 1;
+  console.error(`FAIL support - ${(error as Error).message}`);
+}
+
+console.log(`Evaluacion conversacional: ${passed} pasaron, ${failed} fallaron.`);
+
+if (failed > 0) {
+  process.exit(1);
+}

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertChatbotSchema, insertKnowledgeBaseItemSchema } from "@shared/schema";
+import { insertChatbotSchema, insertKnowledgeBaseItemSchema, type Chatbot } from "@shared/schema";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import multer from "multer";
@@ -11,9 +11,19 @@ import { registerElevenLabsRoutes } from "./elevenlabs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { buildKnowledgeContext, processKnowledgeItem } from "./knowledge-base";
 import { ELEVENLABS_VOICE_ENABLED } from "./feature-flags";
+import { buildRuntimeSystemPrompt, getDeterministicWidgetResponse } from "./conversation-policy";
+import { buildCapabilitiesPrompt, ensureAgentCapabilitiesSeeded } from "./agent-capabilities";
+import {
+  filterModelCatalog,
+  modelFromDb,
+  providerFromDb,
+  staticCatalogForDb,
+  staticProvidersForDb,
+} from "./model-catalog";
 
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 
 const uploadDocs = multer({
   storage: multer.memoryStorage(),
@@ -77,10 +87,230 @@ const gemini = new GoogleGenAI({
   },
 });
 
+const knowledgeUploadDir = path.resolve(process.cwd(), "uploads", "knowledge-base");
+
+function ensureKnowledgeUploadDir() {
+  if (!fs.existsSync(knowledgeUploadDir)) {
+    fs.mkdirSync(knowledgeUploadDir, { recursive: true });
+  }
+}
+
+function safeStoredFilename(originalname: string) {
+  const ext = path.extname(originalname).toLowerCase();
+  const base = path
+    .basename(originalname, ext)
+    .replace(/[^a-zA-Z0-9-_]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "documento";
+  return `${Date.now()}-${crypto.randomBytes(6).toString("hex")}-${base}${ext}`;
+}
+
+async function persistKnowledgeFile(file: Express.Multer.File) {
+  ensureKnowledgeUploadDir();
+  const filename = safeStoredFilename(file.originalname);
+  const filePath = path.join(knowledgeUploadDir, filename);
+  await fs.promises.writeFile(filePath, file.buffer);
+  return path.relative(process.cwd(), filePath).replace(/\\/g, "/");
+}
+
+async function deleteStoredKnowledgeFile(item: { filePath?: string | null }) {
+  if (!item.filePath) return;
+  const absolutePath = path.resolve(process.cwd(), item.filePath);
+  if (!absolutePath.startsWith(knowledgeUploadDir)) return;
+  await fs.promises.unlink(absolutePath).catch(() => {});
+}
+
+function sanitizeChatbot(chatbot: Chatbot) {
+  const { customApiKey, openaiApiKey, geminiApiKey, ...safeChatbot } = chatbot;
+  return {
+    ...safeChatbot,
+    hasCustomApiKey: Boolean(customApiKey),
+    hasOpenaiApiKey: Boolean(openaiApiKey),
+    hasGeminiApiKey: Boolean(geminiApiKey),
+  };
+}
+
+let modelCatalogSeeded = false;
+
+class ModelSettingsValidationError extends Error {
+  statusCode = 400;
+}
+
+async function ensureModelCatalogSeeded() {
+  if (modelCatalogSeeded) return;
+
+  const existingCount = await storage.getModelCatalogCount();
+  if (existingCount === 0) {
+    await storage.replaceModelProviders(staticProvidersForDb());
+    await storage.replaceModelCatalog(staticCatalogForDb());
+  }
+
+  modelCatalogSeeded = true;
+}
+
+function openAiModelToCatalog(modelId: string) {
+  const isEmbedding = modelId.includes("embedding");
+  return {
+    modelId,
+    label: modelId,
+    providerId: "openai",
+    type: isEmbedding ? "embedding" : "chat",
+    dimensions: isEmbedding ? 1536 : null,
+    isDefault: modelId === "gpt-5" || modelId === "text-embedding-3-small",
+    isActive: true,
+    source: "api",
+    notes: "Detectado desde OpenAI Models API.",
+    refreshedAt: new Date(),
+  };
+}
+
+function buildModelSettingsPayload(chatbotId: number, values: any) {
+  return {
+    chatbotId,
+    chatProvider: values.aiProvider || "openai",
+    chatModel: values.aiModel || values.customModelName || "gpt-5",
+    embeddingProvider: values.embeddingProvider || "openai",
+    embeddingModel: values.embeddingModel || "text-embedding-3-small",
+    embeddingDimensions: values.embeddingDimensions || 1536,
+    embeddingBaseUrl: values.embeddingBaseUrl || null,
+    temperature: values.temperature || "0.7",
+    maxTokens: values.maxTokens || 1024,
+  };
+}
+
+function containsModelSettings(values: Record<string, unknown>) {
+  return [
+    "aiProvider",
+    "aiModel",
+    "customEndpoint",
+    "customModelName",
+    "temperature",
+    "maxTokens",
+    "embeddingProvider",
+    "embeddingModel",
+    "embeddingDimensions",
+    "embeddingBaseUrl",
+  ].some((field) => Object.prototype.hasOwnProperty.call(values, field));
+}
+
+function isCustomChatModel(values: Record<string, unknown>) {
+  return values.aiProvider === "custom" || values.aiModel === "custom";
+}
+
+async function validateModelSettingsPayload(values: Record<string, unknown>) {
+  await ensureModelCatalogSeeded();
+
+  const embeddingDimensions = Number(values.embeddingDimensions);
+  if (
+    Object.prototype.hasOwnProperty.call(values, "embeddingDimensions") &&
+    (!Number.isFinite(embeddingDimensions) || embeddingDimensions < 1 || embeddingDimensions > 1536)
+  ) {
+    throw new ModelSettingsValidationError("Las dimensiones de embedding deben estar entre 1 y 1536 para el indice vectorial actual.");
+  }
+
+  const aiProvider = typeof values.aiProvider === "string" ? values.aiProvider : undefined;
+  const aiModel = typeof values.aiModel === "string" ? values.aiModel : undefined;
+  if (aiProvider && aiModel && !isCustomChatModel(values)) {
+    const chatModels = await storage.getModelCatalog({ type: "chat", provider: aiProvider });
+    const isAllowed = chatModels.some((model) => model.modelId === aiModel && model.isActive);
+    if (!isAllowed) {
+      throw new ModelSettingsValidationError(`El modelo de chat "${aiModel}" no esta disponible para el proveedor "${aiProvider}".`);
+    }
+  }
+
+  const embeddingProvider = typeof values.embeddingProvider === "string" ? values.embeddingProvider : undefined;
+  const embeddingModel = typeof values.embeddingModel === "string" ? values.embeddingModel : undefined;
+  if (embeddingProvider && embeddingProvider !== "chatbot" && embeddingModel) {
+    const embeddingModels = await storage.getModelCatalog({ type: "embedding", provider: embeddingProvider });
+    const isAllowed = embeddingModels.some((model) => model.modelId === embeddingModel && model.isActive);
+    if (!isAllowed) {
+      throw new ModelSettingsValidationError(`El modelo de embedding "${embeddingModel}" no esta disponible para el proveedor "${embeddingProvider}".`);
+    }
+  }
+}
+
+async function enableDefaultCapabilitiesForChatbot(chatbotId: number) {
+  await ensureAgentCapabilitiesSeeded();
+  const [skills, tools] = await Promise.all([
+    storage.getAgentSkills(),
+    storage.getAgentTools(),
+  ]);
+  await Promise.all([
+    storage.setChatbotSkills(chatbotId, skills.filter((skill) => skill.isActive).map((skill) => skill.id)),
+    storage.setChatbotTools(chatbotId, tools.filter((tool) => tool.isActive && tool.permission === "read").map((tool) => tool.id)),
+  ]);
+}
+
+async function refreshOpenAIModelCatalog() {
+  const apiKey = process.env.OPENAI_EMBEDDING_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  if (!apiKey) {
+    const staticModels = staticCatalogForDb("openai");
+    await storage.replaceModelCatalog(staticModels, "openai");
+    return { source: "static", models: staticModels.length, message: "No hay API key global de OpenAI; se uso catalogo estatico." };
+  }
+
+  const client = new OpenAI({ apiKey, baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined });
+  const listed = await client.models.list();
+  const apiModels = listed.data
+    .map((model) => model.id)
+    .filter((id) => id.startsWith("gpt-") || id.includes("embedding"))
+    .map(openAiModelToCatalog);
+
+  const staticModels = staticCatalogForDb("openai");
+  const merged = [
+    ...staticModels,
+    ...apiModels.filter((apiModel) => !staticModels.some((staticModel) => staticModel.modelId === apiModel.modelId)),
+  ];
+
+  await storage.replaceModelCatalog(merged, "openai");
+  return { source: "api", models: merged.length, message: "Catalogo OpenAI actualizado." };
+}
+
+async function refreshOllamaModelCatalog(baseUrl?: string) {
+  const resolvedBaseUrl = (baseUrl || process.env.OLLAMA_EMBEDDING_BASE_URL)?.replace(/\/$/, "");
+  if (!resolvedBaseUrl) {
+    const staticModels = staticCatalogForDb("ollama");
+    await storage.replaceModelCatalog(staticModels, "ollama");
+    return { source: "static", models: staticModels.length, message: "No hay base URL de Ollama; se uso catalogo estatico." };
+  }
+
+  const response = await fetch(`${resolvedBaseUrl}/api/tags`);
+  if (!response.ok) {
+    throw new Error(`Ollama /api/tags error (${response.status})`);
+  }
+
+  const data = await response.json();
+  const models = (data.models || []).map((model: any) => ({
+    modelId: model.name,
+    label: `Ollama ${model.name}`,
+    providerId: "ollama",
+    type: "embedding",
+    dimensions: 1536,
+    isDefault: model.name === "nomic-embed-text",
+    isActive: true,
+    source: "api",
+    notes: "Detectado desde Ollama /api/tags. Verifica que el modelo soporte embeddings antes de usarlo.",
+    refreshedAt: new Date(),
+  }));
+
+  const staticModels = staticCatalogForDb("ollama");
+  const merged = [
+    ...staticModels,
+    ...models.filter((apiModel: any) => !staticModels.some((staticModel) => staticModel.modelId === apiModel.modelId)),
+  ];
+
+  await storage.replaceModelCatalog(merged, "ollama");
+  return { source: "api", models: merged.length, message: "Catalogo Ollama actualizado." };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true, service: "sofia-chatia", timestamp: new Date().toISOString() });
+  });
+
   // ==================== Authentication ====================
   await setupAuth(app);
   await registerAuthRoutes(app);
@@ -90,6 +320,158 @@ export async function registerRoutes(
     await registerElevenLabsRoutes(app);
   }
 
+  // ==================== Model Catalog API ====================
+
+  app.get("/api/model-providers", isAuthenticated, async (_req: any, res) => {
+    await ensureModelCatalogSeeded();
+    const providers = await storage.getModelProviders();
+    res.json(providers.map(providerFromDb));
+  });
+
+  app.get("/api/model-catalog", isAuthenticated, async (req: any, res) => {
+    await ensureModelCatalogSeeded();
+    const type = typeof req.query.type === "string" ? req.query.type : undefined;
+    const provider = typeof req.query.provider === "string" ? req.query.provider : undefined;
+    const models = await storage.getModelCatalog({ type, provider });
+    res.json(models.length > 0 ? models.map(modelFromDb) : filterModelCatalog(type, provider));
+  });
+
+  app.post("/api/model-catalog/refresh", isAuthenticated, async (req: any, res) => {
+    try {
+      await ensureModelCatalogSeeded();
+      const provider = req.body?.provider || req.query.provider || "all";
+      const refreshed = [];
+
+      if (provider === "all" || provider === "openai") {
+        refreshed.push({ provider: "openai", ...(await refreshOpenAIModelCatalog()) });
+      }
+      if (provider === "all" || provider === "ollama") {
+        refreshed.push({ provider: "ollama", ...(await refreshOllamaModelCatalog(req.body?.baseUrl)) });
+      }
+      if (provider === "all" || provider === "openrouter" || provider === "gemini" || provider === "custom") {
+        const targetProviders = provider === "all" ? ["openrouter", "gemini", "custom"] : [provider];
+        for (const targetProvider of targetProviders) {
+          const staticModels = staticCatalogForDb(targetProvider);
+          await storage.replaceModelCatalog(staticModels, targetProvider);
+          refreshed.push({ provider: targetProvider, source: "static", models: staticModels.length, message: "Catalogo estatico actualizado." });
+        }
+      }
+
+      const models = await storage.getModelCatalog();
+      res.json({
+        refreshed: true,
+        results: refreshed,
+        models: models.map(modelFromDb),
+      });
+    } catch (error: any) {
+      console.error("Error refreshing model catalog:", error);
+      res.status(500).json({ error: error.message || "Failed to refresh model catalog" });
+    }
+  });
+
+  // ==================== Agent Skills & Tools API ====================
+
+  app.get("/api/agent-skills", isAuthenticated, async (_req: any, res) => {
+    await ensureAgentCapabilitiesSeeded();
+    res.json(await storage.getAgentSkills());
+  });
+
+  app.get("/api/agent-tools", isAuthenticated, async (_req: any, res) => {
+    await ensureAgentCapabilitiesSeeded();
+    res.json(await storage.getAgentTools());
+  });
+
+  app.get("/api/chatbots/:id/capabilities", isAuthenticated, async (req: any, res) => {
+    try {
+      await ensureAgentCapabilitiesSeeded();
+      const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot) return res.status(404).json({ error: "Chatbot not found" });
+      if (chatbot.userId !== userId) return res.status(403).json({ error: "Access denied" });
+
+      let [skills, tools, enabledSkills, enabledTools, logs] = await Promise.all([
+        storage.getAgentSkills(),
+        storage.getAgentTools(),
+        storage.getChatbotSkills(id),
+        storage.getChatbotTools(id),
+        storage.getToolExecutionLogs(id, 20),
+      ]);
+
+      if (enabledSkills.length === 0 && enabledTools.length === 0) {
+        await enableDefaultCapabilitiesForChatbot(id);
+        [enabledSkills, enabledTools] = await Promise.all([
+          storage.getChatbotSkills(id),
+          storage.getChatbotTools(id),
+        ]);
+      }
+
+      res.json({
+        skills,
+        tools,
+        enabledSkillIds: enabledSkills.filter((item) => item.isEnabled).map((item) => item.skillId),
+        enabledToolIds: enabledTools.filter((item) => item.isEnabled).map((item) => item.toolId),
+        recentToolLogs: logs,
+      });
+    } catch (error) {
+      console.error("Error fetching capabilities:", error);
+      res.status(500).json({ error: "Failed to fetch capabilities" });
+    }
+  });
+
+  app.patch("/api/chatbots/:id/capabilities", isAuthenticated, async (req: any, res) => {
+    try {
+      await ensureAgentCapabilitiesSeeded();
+      const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot) return res.status(404).json({ error: "Chatbot not found" });
+      if (chatbot.userId !== userId) return res.status(403).json({ error: "Access denied" });
+
+      const skillIds = Array.isArray(req.body.skillIds) ? req.body.skillIds.filter((item: unknown) => typeof item === "string") : [];
+      const toolIds = Array.isArray(req.body.toolIds) ? req.body.toolIds.filter((item: unknown) => typeof item === "string") : [];
+      const [skills, tools] = await Promise.all([
+        storage.setChatbotSkills(id, skillIds),
+        storage.setChatbotTools(id, toolIds),
+      ]);
+
+      res.json({ skills, tools });
+    } catch (error) {
+      console.error("Error updating capabilities:", error);
+      res.status(500).json({ error: "Failed to update capabilities" });
+    }
+  });
+
+  app.post("/api/chatbots/:id/tools/:toolId/log", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot) return res.status(404).json({ error: "Chatbot not found" });
+      if (chatbot.userId !== userId) return res.status(403).json({ error: "Access denied" });
+
+      const enabledTools = await storage.getChatbotTools(id);
+      const isEnabled = enabledTools.some((tool) => tool.toolId === req.params.toolId && tool.isEnabled);
+      if (!isEnabled) return res.status(403).json({ error: "Tool is not enabled for this chatbot" });
+
+      const log = await storage.createToolExecutionLog({
+        chatbotId: id,
+        conversationId: req.body.conversationId || null,
+        toolId: req.params.toolId,
+        userId,
+        input: req.body.input || {},
+        output: req.body.output || {},
+        status: req.body.status || "success",
+        error: req.body.error || null,
+      });
+
+      res.status(201).json(log);
+    } catch (error) {
+      console.error("Error logging tool execution:", error);
+      res.status(500).json({ error: "Failed to log tool execution" });
+    }
+  });
+
   // ==================== Chatbots API ====================
   
   // Get all chatbots for current user
@@ -97,7 +479,7 @@ export async function registerRoutes(
     try {
       const userId = req.user?.claims?.sub;
       const chatbots = await storage.getChatbotsByUser(userId);
-      res.json(chatbots);
+      res.json(chatbots.map(sanitizeChatbot));
     } catch (error) {
       console.error("Error fetching chatbots:", error);
       res.status(500).json({ error: "Failed to fetch chatbots" });
@@ -116,7 +498,7 @@ export async function registerRoutes(
       if (chatbot.userId !== userId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      res.json(chatbot);
+      res.json(sanitizeChatbot(chatbot));
     } catch (error) {
       console.error("Error fetching chatbot:", error);
       res.status(500).json({ error: "Failed to fetch chatbot" });
@@ -131,6 +513,9 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
+      if (containsModelSettings(req.body)) {
+        await validateModelSettingsPayload(req.body);
+      }
       const userId = req.user?.claims?.sub;
       
       // Check limit
@@ -143,9 +528,14 @@ export async function registerRoutes(
       }
       
       const chatbot = await storage.createChatbot({ ...parsed.data, userId });
-      res.status(201).json(chatbot);
+      await storage.upsertChatbotModelSettings(buildModelSettingsPayload(chatbot.id, chatbot));
+      await enableDefaultCapabilitiesForChatbot(chatbot.id);
+      res.status(201).json(sanitizeChatbot(chatbot));
     } catch (error) {
       console.error("Error creating chatbot:", error);
+      if (error instanceof ModelSettingsValidationError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       res.status(500).json({ error: "Failed to create chatbot" });
     }
   });
@@ -162,11 +552,83 @@ export async function registerRoutes(
       if (existing.userId !== userId) {
         return res.status(403).json({ error: "Access denied" });
       }
+      if (containsModelSettings(req.body)) {
+        await validateModelSettingsPayload(req.body);
+      }
       const chatbot = await storage.updateChatbot(id, req.body);
-      res.json(chatbot);
+      if (chatbot && containsModelSettings(req.body)) {
+        await storage.upsertChatbotModelSettings(buildModelSettingsPayload(chatbot.id, chatbot));
+      }
+      res.json(chatbot ? sanitizeChatbot(chatbot) : chatbot);
     } catch (error) {
       console.error("Error updating chatbot:", error);
+      if (error instanceof ModelSettingsValidationError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       res.status(500).json({ error: "Failed to update chatbot" });
+    }
+  });
+
+  app.patch("/api/chatbots/:id/model-settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      const existing = await storage.getChatbot(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Chatbot not found" });
+      }
+      if (existing.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const allowedFields = [
+        "aiProvider",
+        "aiModel",
+        "customEndpoint",
+        "customModelName",
+        "temperature",
+        "maxTokens",
+        "embeddingProvider",
+        "embeddingModel",
+        "embeddingDimensions",
+        "embeddingBaseUrl",
+      ];
+      const updates = Object.fromEntries(
+        Object.entries(req.body).filter(([key]) => allowedFields.includes(key)),
+      );
+      await validateModelSettingsPayload(updates);
+
+      const chatbot = await storage.updateChatbot(id, updates);
+      if (chatbot) {
+        await storage.upsertChatbotModelSettings(buildModelSettingsPayload(chatbot.id, chatbot));
+      }
+      res.json(chatbot ? sanitizeChatbot(chatbot) : chatbot);
+    } catch (error) {
+      console.error("Error updating chatbot model settings:", error);
+      if (error instanceof ModelSettingsValidationError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      res.status(500).json({ error: "Failed to update chatbot model settings" });
+    }
+  });
+
+  app.get("/api/chatbots/:id/model-settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot) {
+        return res.status(404).json({ error: "Chatbot not found" });
+      }
+      if (chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const settings = await storage.getChatbotModelSettings(id);
+      res.json(settings || buildModelSettingsPayload(id, chatbot));
+    } catch (error) {
+      console.error("Error fetching chatbot model settings:", error);
+      res.status(500).json({ error: "Failed to fetch chatbot model settings" });
     }
   });
 
@@ -253,6 +715,7 @@ export async function registerRoutes(
           return res.status(403).json({ error: "Access denied" });
         }
       }
+      await deleteStoredKnowledgeFile(item || {});
       await storage.deleteKnowledgeBaseItem(id);
       res.status(204).send();
     } catch (error) {
@@ -261,18 +724,82 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/knowledge-base/delete-batch", isAuthenticated, async (req: any, res) => {
+    try {
+      const ids = Array.isArray(req.body?.ids)
+        ? req.body.ids.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
+        : [];
+      const userId = req.user?.claims?.sub;
+
+      if (ids.length === 0) {
+        return res.status(400).json({ error: "Selecciona al menos un elemento para eliminar." });
+      }
+
+      const items = [];
+      for (const id of ids) {
+        const item = await storage.getKnowledgeBaseItem(id);
+        if (!item?.chatbotId) {
+          return res.status(404).json({ error: `Elemento ${id} no encontrado.` });
+        }
+        const chatbot = await storage.getChatbot(item.chatbotId);
+        if (!chatbot || chatbot.userId !== userId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        items.push(item);
+      }
+
+      for (const item of items) {
+        await deleteStoredKnowledgeFile(item);
+      }
+      await storage.deleteKnowledgeBaseItems(ids);
+      res.json({ deleted: ids.length });
+    } catch (error) {
+      console.error("Error batch deleting knowledge base items:", error);
+      res.status(500).json({ error: "Failed to delete knowledge base items" });
+    }
+  });
+
+  app.get("/api/knowledge-base/:id/file", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+      const item = await storage.getKnowledgeBaseItem(id);
+      if (!item?.chatbotId || !item.filePath) {
+        return res.status(404).json({ error: "Archivo no encontrado" });
+      }
+
+      const chatbot = await storage.getChatbot(item.chatbotId);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const absolutePath = path.resolve(process.cwd(), item.filePath);
+      if (!absolutePath.startsWith(knowledgeUploadDir) || !fs.existsSync(absolutePath)) {
+        return res.status(404).json({ error: "Archivo no encontrado" });
+      }
+
+      res.setHeader("Content-Type", item.mimeType || "application/octet-stream");
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(item.sourceUrl || item.title)}"`);
+      res.sendFile(absolutePath);
+    } catch (error) {
+      console.error("Error serving knowledge file:", error);
+      res.status(500).json({ error: "Failed to serve file" });
+    }
+  });
+
   // Helper function to extract content from a file buffer
   async function extractFileContent(file: { mimetype: string; buffer: Buffer; originalname: string }): Promise<string> {
     if (file.mimetype === 'application/pdf') {
-      // Usar la ruta interna para evitar el bug del index.js de pdf-parse v1
-      const pdfModule = await import("pdf-parse/lib/pdf-parse.js") as any;
-      const pdfParse = pdfModule.default || pdfModule;
+      const { PDFParse } = await import("pdf-parse");
+      const parser = new PDFParse({ data: file.buffer });
       try {
-        const pdfData = await pdfParse(file.buffer);
+        const pdfData = await parser.getText();
         return pdfData.text || "";
       } catch (pdfError: any) {
         console.error(`[pdf-parse] Error en "${file.originalname}":`, pdfError?.message || pdfError);
         throw new Error(`Error al leer el PDF "${file.originalname}": el archivo puede estar corrupto o protegido con contraseña.`);
+      } finally {
+        await parser.destroy().catch(() => {});
       }
     } else if (file.mimetype === 'application/msword' ||
                file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
@@ -387,12 +914,16 @@ export async function registerRoutes(
         });
       }
 
+      const storedFilePath = await persistKnowledgeFile(file);
       const item = await storage.createKnowledgeBaseItem({
         chatbotId,
         title,
         content: content.trim(),
         sourceType: "file",
         sourceUrl: file.originalname,
+        filePath: storedFilePath,
+        mimeType: file.mimetype,
+        fileSize: file.size,
       });
 
       await processKnowledgeItem(item);
@@ -463,12 +994,16 @@ export async function registerRoutes(
             continue;
           }
 
+          const storedFilePath = await persistKnowledgeFile(file);
           const item = await storage.createKnowledgeBaseItem({
             chatbotId,
             title: file.originalname,
             content: content.trim(),
             sourceType: "file",
             sourceUrl: file.originalname,
+            filePath: storedFilePath,
+            mimeType: file.mimetype,
+            fileSize: file.size,
           });
 
           await processKnowledgeItem(item);
@@ -795,7 +1330,7 @@ export async function registerRoutes(
         const conversations = await storage.getRecentConversations(chatbot.id, 100);
         
         exportData.chatbots.push({
-          ...chatbot,
+          ...sanitizeChatbot(chatbot),
           knowledgeBase,
           conversations,
         });
@@ -973,14 +1508,38 @@ export async function registerRoutes(
 
       // Get conversation history
       const messages = await storage.getWidgetMessagesByConversation(conversation.id);
+      const deterministicResponse = getDeterministicWidgetResponse(messages);
       
       // Retrieve only the most relevant knowledge snippets so the prompt stays usable
-      const knowledgeItems = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
-      console.log(`[Widget Chat] Chatbot ${chatbotId} has ${knowledgeItems.length} knowledge base items`);
-      const knowledgeContextResult = buildKnowledgeContext(knowledgeItems, messages);
+      if (deterministicResponse) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+
+        const startTime = Date.now();
+        const responseTimeMs = Date.now() - startTime;
+
+        await storage.createWidgetMessage({
+          conversationId: conversation.id,
+          role: "assistant",
+          content: deterministicResponse,
+          responseTimeMs,
+          knowledgeStrategy: "deterministic",
+          knowledgeSources: [],
+          knowledgeChunks: 0,
+        });
+
+        res.write(`data: ${JSON.stringify({ content: deterministicResponse })}\n\n`);
+        res.write(`data: ${JSON.stringify({ done: true, responseTimeMs })}\n\n`);
+        res.end();
+        return;
+      }
+
+      // Retrieve only the most relevant knowledge snippets so the prompt stays usable
+      const knowledgeContextResult = await buildKnowledgeContext(chatbotId, messages);
       const knowledgeContext = knowledgeContextResult.context;
       console.log(
-        `[Widget Chat] Knowledge retrieval strategy=${knowledgeContextResult.strategy} items=${knowledgeContextResult.totalItems} chunks=${knowledgeContextResult.totalChunks} selected=${knowledgeContextResult.selectedChunks} contextChars=${knowledgeContextResult.contextChars}`,
+        `[Widget Chat] Knowledge retrieval strategy=${knowledgeContextResult.strategy} chunks=${knowledgeContextResult.chunksFound || 0} sources=${knowledgeContextResult.sources?.join(", ") || "none"} contextChars=${knowledgeContext.length}`,
       );
 
       // Set up SSE
@@ -992,13 +1551,15 @@ export async function registerRoutes(
       const aiProvider = chatbot.aiProvider || "openai";
       const aiModel = chatbot.aiModel || "gpt-5";
       const startTime = Date.now();
+      const capabilitiesPrompt = await buildCapabilitiesPrompt(chatbotId);
+      const runtimeSystemPrompt = buildRuntimeSystemPrompt(chatbot.systemPrompt, `${capabilitiesPrompt}\n${knowledgeContext}`);
 
       if (aiProvider === "openrouter") {
         // Build OpenAI-compatible messages for OpenRouter (free models)
         const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
           {
             role: "system",
-            content: (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext,
+            content: runtimeSystemPrompt,
           },
           ...messages.map((m) => ({
             role: m.role as "user" | "assistant",
@@ -1032,7 +1593,7 @@ export async function registerRoutes(
         const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
           {
             role: "system",
-            content: (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext,
+            content: runtimeSystemPrompt,
           },
           ...messages.map((m) => ({
             role: m.role as "user" | "assistant",
@@ -1063,7 +1624,6 @@ export async function registerRoutes(
         }
       } else if (aiProvider === "gemini") {
         // Build Gemini messages
-        const systemPrompt = (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext;
         const geminiMessages = messages.map((m) => ({
           role: m.role === "user" ? "user" : "model" as const,
           parts: [{ text: m.content }],
@@ -1071,7 +1631,7 @@ export async function registerRoutes(
 
         // Add system prompt as first user message for Gemini
         const fullContents = [
-          { role: "user" as const, parts: [{ text: `System instructions: ${systemPrompt}` }] },
+          { role: "user" as const, parts: [{ text: `System instructions: ${runtimeSystemPrompt}` }] },
           { role: "model" as const, parts: [{ text: "Understood. I will follow these instructions." }] },
           ...geminiMessages,
         ];
@@ -1101,7 +1661,7 @@ export async function registerRoutes(
         const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
           {
             role: "system",
-            content: (chatbot.systemPrompt || "You are a helpful assistant.") + knowledgeContext,
+            content: runtimeSystemPrompt,
           },
           ...messages.map((m) => ({
             role: m.role as "user" | "assistant",
@@ -1139,6 +1699,9 @@ export async function registerRoutes(
         role: "assistant",
         content: fullResponse,
         responseTimeMs,
+        knowledgeStrategy: knowledgeContextResult.strategy,
+        knowledgeSources: knowledgeContextResult.sources || [],
+        knowledgeChunks: knowledgeContextResult.chunksFound || 0,
       });
 
       res.write(`data: ${JSON.stringify({ done: true, responseTimeMs })}\n\n`);
@@ -1220,7 +1783,7 @@ export async function registerRoutes(
       const avatarUrl = `/uploads/${file.filename}`;
       const updatedChatbot = await storage.updateChatbot(id, { avatarImage: avatarUrl });
       
-      res.json({ avatarImage: avatarUrl, chatbot: updatedChatbot });
+      res.json({ avatarImage: avatarUrl, chatbot: updatedChatbot ? sanitizeChatbot(updatedChatbot) : updatedChatbot });
     } catch (error) {
       console.error("Error uploading avatar:", error);
       res.status(500).json({ error: "No se pudo subir la imagen" });
@@ -1252,7 +1815,7 @@ export async function registerRoutes(
       }
 
       const updatedChatbot = await storage.updateChatbot(id, { avatarImage: null });
-      res.json({ chatbot: updatedChatbot });
+      res.json({ chatbot: updatedChatbot ? sanitizeChatbot(updatedChatbot) : updatedChatbot });
     } catch (error) {
       console.error("Error deleting avatar:", error);
       res.status(500).json({ error: "No se pudo eliminar la imagen" });
@@ -1309,7 +1872,18 @@ export async function registerRoutes(
   app.patch("/api/predefined-responses/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
       const updates = req.body;
+
+      const existing = await storage.getPredefinedResponse(id);
+      if (!existing?.chatbotId) {
+        return res.status(404).json({ error: "Response not found" });
+      }
+
+      const chatbot = await storage.getChatbot(existing.chatbotId);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       
       const response = await storage.updatePredefinedResponse(id, updates);
       res.json(response);
@@ -1323,6 +1897,18 @@ export async function registerRoutes(
   app.delete("/api/predefined-responses/:id", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);
+      const userId = req.user?.claims?.sub;
+
+      const existing = await storage.getPredefinedResponse(id);
+      if (!existing?.chatbotId) {
+        return res.status(404).json({ error: "Response not found" });
+      }
+
+      const chatbot = await storage.getChatbot(existing.chatbotId);
+      if (!chatbot || chatbot.userId !== userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
       await storage.deletePredefinedResponse(id);
       res.json({ success: true });
     } catch (error) {

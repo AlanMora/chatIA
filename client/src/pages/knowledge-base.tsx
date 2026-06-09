@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BookOpen, Plus, FileText, Link as LinkIcon, Trash2, Upload, Globe, File, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { BookOpen, Plus, FileText, Link as LinkIcon, Trash2, Upload, Globe, File, CheckCircle, XCircle, Loader2, Eye } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -43,7 +43,9 @@ export default function KnowledgeBase() {
   const [selectedChatbot, setSelectedChatbot] = useState<string>("");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<KnowledgeBaseItem | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
   const [activeTab, setActiveTab] = useState("text");
   const [newItem, setNewItem] = useState({
     title: "",
@@ -237,6 +239,28 @@ export default function KnowledgeBase() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await apiRequest("POST", "/api/knowledge-base/delete-batch", { ids });
+    },
+    onSuccess: (_data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base", selectedChatbot] });
+      toast({
+        title: "Contenido eliminado",
+        description: `Se eliminaron ${ids.length} elemento(s) de la base de conocimiento.`,
+      });
+      setSelectedItemIds([]);
+      setBulkDeleteDialogOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "No se pudieron eliminar los elementos seleccionados.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAdd = () => {
     if (!selectedChatbot || !newItem.title || !newItem.content) return;
     addMutation.mutate({
@@ -248,6 +272,25 @@ export default function KnowledgeBase() {
   const handleDelete = (item: KnowledgeBaseItem) => {
     setSelectedItem(item);
     setDeleteDialogOpen(true);
+  };
+
+  const toggleSelectedItem = (id: number) => {
+    setSelectedItemIds((current) =>
+      current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id],
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (!knowledgeItems?.length) return;
+    if (selectedItemIds.length === knowledgeItems.length) {
+      setSelectedItemIds([]);
+    } else {
+      setSelectedItemIds(knowledgeItems.map((item) => item.id));
+    }
+  };
+
+  const openStoredFile = (item: KnowledgeBaseItem) => {
+    window.open(`/api/knowledge-base/${item.id}/file`, "_blank", "noopener,noreferrer");
   };
 
   const getSourceIcon = (type: string) => {
@@ -285,7 +328,13 @@ export default function KnowledgeBase() {
           {isLoadingChatbots ? (
             <Skeleton className="h-10 w-48" />
           ) : (
-            <Select value={selectedChatbot} onValueChange={setSelectedChatbot}>
+            <Select
+              value={selectedChatbot}
+              onValueChange={(value) => {
+                setSelectedChatbot(value);
+                setSelectedItemIds([]);
+              }}
+            >
               <SelectTrigger className="w-48" data-testid="select-chatbot">
                 <SelectValue placeholder="Selecciona un chatbot" />
               </SelectTrigger>
@@ -336,51 +385,103 @@ export default function KnowledgeBase() {
           ))}
         </div>
       ) : knowledgeItems && knowledgeItems.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {knowledgeItems.map((item) => (
-            <Card key={item.id} className="group" data-testid={`card-knowledge-${item.id}`}>
-              <CardHeader className="flex flex-row items-start justify-between gap-2">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                    {getSourceIcon(item.sourceType || "text")}
-                  </div>
-                  <div className="min-w-0">
-                    <CardTitle className="text-base truncate">{item.title}</CardTitle>
-                    <CardDescription className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="text-xs">
-                        {getSourceLabel(item.sourceType || "text")}
-                      </Badge>
-                    </CardDescription>
-                  </div>
-                </div>
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selectedItemIds.length === knowledgeItems.length}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border"
+                  data-testid="checkbox-select-all-kb"
+                />
+                Seleccionar todos ({knowledgeItems.length})
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {selectedItemIds.length} seleccionado(s)
+                </span>
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => handleDelete(item)}
-                  data-testid={`button-delete-${item.id}`}
+                  variant="destructive"
+                  size="sm"
+                  disabled={selectedItemIds.length === 0}
+                  onClick={() => setBulkDeleteDialogOpen(true)}
+                  data-testid="button-delete-selected-kb"
                 >
-                  <Trash2 className="h-4 w-4 text-destructive" />
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Eliminar seleccionados
                 </Button>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground line-clamp-3">
-                  {item.content}
-                </p>
-                {item.sourceUrl && (
-                  <a
-                    href={item.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    <LinkIcon className="h-3 w-3" />
-                    {item.sourceUrl}
-                  </a>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {knowledgeItems.map((item) => (
+              <Card key={item.id} className="group" data-testid={`card-knowledge-${item.id}`}>
+                <CardHeader className="flex flex-row items-start justify-between gap-2">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedItemIds.includes(item.id)}
+                      onChange={() => toggleSelectedItem(item.id)}
+                      className="mt-2 h-4 w-4 rounded border"
+                      data-testid={`checkbox-kb-${item.id}`}
+                    />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      {getSourceIcon(item.sourceType || "text")}
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base truncate">{item.title}</CardTitle>
+                      <CardDescription className="flex items-center gap-2 mt-1">
+                        <Badge variant="secondary" className="text-xs">
+                          {getSourceLabel(item.sourceType || "text")}
+                        </Badge>
+                        {item.fileSize && (
+                          <span className="text-xs text-muted-foreground">
+                            {(item.fileSize / 1024 / 1024).toFixed(2)} MB
+                          </span>
+                        )}
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    {item.filePath && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openStoredFile(item)}
+                        data-testid={`button-view-${item.id}`}
+                        title="Visualizar archivo"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(item)}
+                      data-testid={`button-delete-${item.id}`}
+                      title="Eliminar"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground line-clamp-3">
+                    {item.content}
+                  </p>
+                  {item.sourceUrl && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                      <LinkIcon className="h-3 w-3" />
+                      <span className="truncate">{item.sourceUrl}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       ) : (
         <Card>
@@ -664,6 +765,26 @@ export default function KnowledgeBase() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteMutation.isPending ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar elementos seleccionados</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que quieres eliminar {selectedItemIds.length} elemento(s)? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => bulkDeleteMutation.mutate(selectedItemIds)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkDeleteMutation.isPending ? "Eliminando..." : "Eliminar seleccionados"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

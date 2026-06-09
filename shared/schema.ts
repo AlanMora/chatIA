@@ -22,6 +22,7 @@ const vector = customType<{ data: number[] }>({
 
 // Auth tables (users and sessions)
 export * from "./models/auth";
+export * from "./models/chat";
 
 // Chatbots table
 export const chatbots = pgTable("chatbots", {
@@ -39,11 +40,16 @@ export const chatbots = pgTable("chatbots", {
   // Per-chatbot API keys for premium providers
   openaiApiKey: text("openai_api_key"),
   geminiApiKey: text("gemini_api_key"),
+  // Embedding settings for RAG
+  embeddingProvider: text("embedding_provider").default("openai"),
+  embeddingModel: text("embedding_model").default("text-embedding-3-small"),
+  embeddingDimensions: integer("embedding_dimensions").default(1536),
+  embeddingBaseUrl: text("embedding_base_url"),
   // Appearance settings
   primaryColor: text("primary_color").default("#3B82F6"),
   textColor: text("text_color").default("#FFFFFF"),
   position: text("position").default("bottom-right"),
-  welcomeMessage: text("welcome_message").default("Hello! How can I help you today?"),
+  welcomeMessage: text("welcome_message").default("Hola, soy SofIA, asistente virtual del DIF Zapopan. Puedo orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles. Escribe el tramite o servicio que buscas, pide un listado por tema o grupo de atencion, o selecciona un apartado como requisitos, costos, horarios, lugar y contacto."),
   avatarImage: text("avatar_image"),
   // Behavior settings
   temperature: text("temperature").default("0.7"),
@@ -66,6 +72,65 @@ export const insertChatbotSchema = createInsertSchema(chatbots).omit({
 export type InsertChatbot = z.infer<typeof insertChatbotSchema>;
 export type Chatbot = typeof chatbots.$inferSelect;
 
+// Model providers and catalog
+export const modelProviders = pgTable("model_providers", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // chat, embedding, both
+  requiresApiKey: boolean("requires_api_key").default(false),
+  supportsCustomBaseUrl: boolean("supports_custom_base_url").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertModelProviderSchema = createInsertSchema(modelProviders).omit({
+  createdAt: true,
+});
+
+export type InsertModelProvider = z.infer<typeof insertModelProviderSchema>;
+export type ModelProvider = typeof modelProviders.$inferSelect;
+
+export const modelCatalog = pgTable("model_catalog", {
+  id: serial("id").primaryKey(),
+  modelId: text("model_id").notNull(),
+  label: text("label").notNull(),
+  providerId: text("provider_id").notNull(),
+  type: text("type").notNull(), // chat, embedding
+  dimensions: integer("dimensions"),
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true),
+  source: text("source").default("static"),
+  notes: text("notes"),
+  refreshedAt: timestamp("refreshed_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertModelCatalogSchema = createInsertSchema(modelCatalog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertModelCatalog = z.infer<typeof insertModelCatalogSchema>;
+export type ModelCatalog = typeof modelCatalog.$inferSelect;
+
+export const chatbotModelSettings = pgTable("chatbot_model_settings", {
+  chatbotId: integer("chatbot_id").primaryKey().references(() => chatbots.id, { onDelete: "cascade" }),
+  chatProvider: text("chat_provider").default("openai"),
+  chatModel: text("chat_model").default("gpt-5"),
+  embeddingProvider: text("embedding_provider").default("openai"),
+  embeddingModel: text("embedding_model").default("text-embedding-3-small"),
+  embeddingDimensions: integer("embedding_dimensions").default(1536),
+  embeddingBaseUrl: text("embedding_base_url"),
+  temperature: text("temperature").default("0.7"),
+  maxTokens: integer("max_tokens").default(1024),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertChatbotModelSettingsSchema = createInsertSchema(chatbotModelSettings);
+
+export type InsertChatbotModelSettings = z.infer<typeof insertChatbotModelSettingsSchema>;
+export type ChatbotModelSettings = typeof chatbotModelSettings.$inferSelect;
+
 // Knowledge Base items
 export const knowledgeBaseItems = pgTable("knowledge_base_items", {
   id: serial("id").primaryKey(),
@@ -74,6 +139,9 @@ export const knowledgeBaseItems = pgTable("knowledge_base_items", {
   content: text("content").notNull(),
   sourceType: text("source_type").default("text"), // text, url, file
   sourceUrl: text("source_url"),
+  filePath: text("file_path"),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -84,6 +152,98 @@ export const insertKnowledgeBaseItemSchema = createInsertSchema(knowledgeBaseIte
 
 export type InsertKnowledgeBaseItem = z.infer<typeof insertKnowledgeBaseItemSchema>;
 export type KnowledgeBaseItem = typeof knowledgeBaseItems.$inferSelect;
+
+// Agent skills and tools
+export const agentSkills = pgTable("agent_skills", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  instructions: text("instructions").notNull(),
+  category: text("category").default("general"),
+  isSystem: boolean("is_system").default(true),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertAgentSkillSchema = createInsertSchema(agentSkills).omit({
+  createdAt: true,
+});
+
+export type InsertAgentSkill = z.infer<typeof insertAgentSkillSchema>;
+export type AgentSkill = typeof agentSkills.$inferSelect;
+
+export const agentTools = pgTable("agent_tools", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").default("knowledge"),
+  permission: text("permission").default("read"), // read, write, external, sensitive
+  requiresConfirmation: boolean("requires_confirmation").default(false),
+  schema: jsonb("schema").$type<Record<string, unknown>>(),
+  isSystem: boolean("is_system").default(true),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertAgentToolSchema = createInsertSchema(agentTools).omit({
+  createdAt: true,
+});
+
+export type InsertAgentTool = z.infer<typeof insertAgentToolSchema>;
+export type AgentTool = typeof agentTools.$inferSelect;
+
+export const chatbotSkills = pgTable("chatbot_skills", {
+  id: serial("id").primaryKey(),
+  chatbotId: integer("chatbot_id").references(() => chatbots.id, { onDelete: "cascade" }).notNull(),
+  skillId: text("skill_id").references(() => agentSkills.id, { onDelete: "cascade" }).notNull(),
+  isEnabled: boolean("is_enabled").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertChatbotSkillSchema = createInsertSchema(chatbotSkills).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertChatbotSkill = z.infer<typeof insertChatbotSkillSchema>;
+export type ChatbotSkill = typeof chatbotSkills.$inferSelect;
+
+export const chatbotTools = pgTable("chatbot_tools", {
+  id: serial("id").primaryKey(),
+  chatbotId: integer("chatbot_id").references(() => chatbots.id, { onDelete: "cascade" }).notNull(),
+  toolId: text("tool_id").references(() => agentTools.id, { onDelete: "cascade" }).notNull(),
+  isEnabled: boolean("is_enabled").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertChatbotToolSchema = createInsertSchema(chatbotTools).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertChatbotTool = z.infer<typeof insertChatbotToolSchema>;
+export type ChatbotTool = typeof chatbotTools.$inferSelect;
+
+export const toolExecutionLogs = pgTable("tool_execution_logs", {
+  id: serial("id").primaryKey(),
+  chatbotId: integer("chatbot_id").references(() => chatbots.id, { onDelete: "cascade" }),
+  conversationId: integer("conversation_id"),
+  toolId: text("tool_id").references(() => agentTools.id, { onDelete: "set null" }),
+  userId: varchar("user_id"),
+  input: jsonb("input").$type<Record<string, unknown>>(),
+  output: jsonb("output").$type<Record<string, unknown>>(),
+  status: text("status").default("success"),
+  error: text("error"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertToolExecutionLogSchema = createInsertSchema(toolExecutionLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertToolExecutionLog = z.infer<typeof insertToolExecutionLogSchema>;
+export type ToolExecutionLog = typeof toolExecutionLogs.$inferSelect;
 
 // Knowledge Base Chunks (for Vector Search / RAG)
 export const knowledgeBaseChunks = pgTable("knowledge_base_chunks", {
@@ -132,6 +292,9 @@ export const widgetMessages = pgTable("widget_messages", {
   role: text("role").notNull(), // user or assistant
   content: text("content").notNull(),
   responseTimeMs: integer("response_time_ms"), // Time to generate response in ms (for assistant messages)
+  knowledgeStrategy: text("knowledge_strategy"),
+  knowledgeSources: jsonb("knowledge_sources").$type<string[]>(),
+  knowledgeChunks: integer("knowledge_chunks"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

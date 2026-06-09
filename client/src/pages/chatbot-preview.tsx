@@ -18,6 +18,19 @@ interface Message {
   content: string;
 }
 
+const DEFAULT_WELCOME_MESSAGE = `Hola, soy SofIA, asistente virtual del DIF Zapopan.
+
+Puedo orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles.
+
+Puedes escribirme el tramite o servicio que buscas, pedir un listado por tema o grupo de atencion, o seleccionar un apartado como requisitos, costos, horarios, lugar y contacto.
+
+Elige una opcion o escribe tu pregunta:
+
+1. Buscar un tramite o servicio
+2. No se que necesito
+3. Ver por grupo de atencion
+4. Ver programas o talleres`;
+
 export default function ChatbotPreview() {
   const [, params] = useRoute("/chatbots/:id/preview");
   const chatbotId = parseInt(params?.id || "0");
@@ -38,7 +51,7 @@ export default function ChatbotPreview() {
         {
           id: "welcome",
           role: "assistant",
-          content: chatbot.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
+          content: chatbot.welcomeMessage || DEFAULT_WELCOME_MESSAGE,
         },
       ]);
     }

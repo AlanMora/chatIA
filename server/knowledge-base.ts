@@ -2,6 +2,7 @@ import type { KnowledgeBaseItem, KnowledgeBaseChunk } from "@shared/schema";
 import OpenAI from "openai";
 import { storage } from "./storage";
 import { GoogleGenAI } from "@google/genai";
+import { classifyConversationIntent, extractServiceNameFromSectionMenu } from "./conversation-policy";
 
 type MessageLike = {
   role: string;
@@ -18,6 +19,133 @@ export type KnowledgeContextResult = {
 const CHUNK_SIZE = 1000;
 const CHUNK_OVERLAP = 200;
 const MAX_CONCURRENCY = 5;
+const VECTOR_DIMENSIONS = 1536;
+
+function buildRetrievalQuery(messages: MessageLike[]): string | null {
+  const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content;
+  if (!lastUserMessage) return null;
+
+  const activeService = [...messages]
+    .slice(0, -1)
+    .reverse()
+    .filter(m => m.role === "assistant")
+    .map(m => extractServiceNameFromSectionMenu(m.content))
+    .find((serviceName): serviceName is string => Boolean(serviceName));
+  const intent = classifyConversationIntent(lastUserMessage, messages);
+
+  if (activeService && (intent === "section_request" || intent === "complete_record")) {
+    return `${activeService} ${lastUserMessage}`;
+  }
+
+  return lastUserMessage;
+}
+
+function normalizeEmbedding(values: number[]): number[] {
+  if (values.length < VECTOR_DIMENSIONS) {
+    return [...values, ...new Array(VECTOR_DIMENSIONS - values.length).fill(0)];
+  }
+  return values.slice(0, VECTOR_DIMENSIONS);
+}
+
+function getOllamaEmbeddingConfig(chatbot?: any) {
+  const baseUrl = (chatbot?.embeddingBaseUrl || process.env.OLLAMA_EMBEDDING_BASE_URL)?.replace(/\/$/, "");
+  const model = chatbot?.embeddingModel || process.env.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text";
+
+  if (!baseUrl) return null;
+
+  return { baseUrl, model };
+}
+
+function getEmbeddingProvider(chatbot: any): "openai" | "ollama" | "chatbot" {
+  const chatbotProvider = chatbot.embeddingProvider?.toLowerCase();
+  if (chatbotProvider === "openai" || chatbotProvider === "ollama" || chatbotProvider === "chatbot") {
+    return chatbotProvider;
+  }
+
+  const configuredProvider = process.env.EMBEDDING_PROVIDER?.toLowerCase();
+  if (configuredProvider === "openai" || configuredProvider === "ollama" || configuredProvider === "chatbot") {
+    return configuredProvider;
+  }
+
+  if (process.env.OLLAMA_EMBEDDING_BASE_URL) return "ollama";
+  if (process.env.OPENAI_EMBEDDING_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY || chatbot.openaiApiKey) return "openai";
+  return "chatbot";
+}
+
+async function generateOllamaEmbedding(text: string, chatbot?: any): Promise<number[]> {
+  const config = getOllamaEmbeddingConfig(chatbot);
+  if (!config) {
+    throw new Error("OLLAMA_EMBEDDING_BASE_URL is not configured");
+  }
+
+  const embedResponse = await fetch(`${config.baseUrl}/api/embed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: config.model,
+      input: text,
+    }),
+  });
+
+  if (embedResponse.ok) {
+    const data = await embedResponse.json();
+    const values = Array.isArray(data.embeddings?.[0]) ? data.embeddings[0] : data.embedding;
+    if (Array.isArray(values)) return normalizeEmbedding(values);
+    throw new Error("Invalid Ollama /api/embed response format");
+  }
+
+  // Older Ollama versions expose /api/embeddings with a single prompt.
+  const legacyResponse = await fetch(`${config.baseUrl}/api/embeddings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: config.model,
+      prompt: text,
+    }),
+  });
+
+  if (!legacyResponse.ok) {
+    const err = await legacyResponse.text();
+    throw new Error(`Ollama embedding API error (${legacyResponse.status}): ${err}`);
+  }
+
+  const data = await legacyResponse.json();
+  if (!Array.isArray(data.embedding)) {
+    throw new Error("Invalid Ollama /api/embeddings response format");
+  }
+
+  return normalizeEmbedding(data.embedding);
+}
+
+async function generateOpenAIEmbedding(text: string, chatbot: any): Promise<number[]> {
+  const apiKey =
+    process.env.OPENAI_EMBEDDING_API_KEY ||
+    chatbot.openaiApiKey ||
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+
+  if (!apiKey || apiKey === "Missing Key") {
+    throw new Error("Missing OpenAI API Key for embeddings");
+  }
+
+  const openaiInstance = new OpenAI({
+    apiKey,
+    baseURL: process.env.OPENAI_EMBEDDING_BASE_URL || process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || undefined,
+  });
+
+  const model = chatbot.embeddingModel || process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
+  const dimensions = parseInt(
+    `${chatbot.embeddingDimensions || process.env.OPENAI_EMBEDDING_DIMENSIONS || VECTOR_DIMENSIONS}`,
+    10,
+  );
+
+  const response = await openaiInstance.embeddings.create({
+    model,
+    input: text,
+    dimensions: Number.isFinite(dimensions) ? dimensions : VECTOR_DIMENSIONS,
+  });
+
+  return normalizeEmbedding(response.data[0].embedding);
+}
 
 /**
  * Generates an embedding based on the chatbot's provider
@@ -25,6 +153,20 @@ const MAX_CONCURRENCY = 5;
 async function generateEmbedding(text: string, chatbot: any): Promise<number[]> {
   const provider = chatbot.aiProvider || "openai";
   const textToEmbed = text.replace(/\n/g, " ");
+  const embeddingProvider = getEmbeddingProvider(chatbot);
+
+  if (embeddingProvider === "openai") {
+    const model = chatbot.embeddingModel || process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
+    console.log(`[RAG] Generating embedding for chatbot ${chatbot.id} using OpenAI model: ${model}`);
+    return generateOpenAIEmbedding(textToEmbed, chatbot);
+  }
+
+  if (embeddingProvider === "ollama") {
+    const ollamaConfig = getOllamaEmbeddingConfig(chatbot);
+    if (!ollamaConfig) throw new Error("OLLAMA_EMBEDDING_BASE_URL is not configured");
+    console.log(`[RAG] Generating embedding for chatbot ${chatbot.id} using Ollama model: ${ollamaConfig.model}`);
+    return generateOllamaEmbedding(textToEmbed, chatbot);
+  }
 
   console.log(`[RAG] Generating embedding for chatbot ${chatbot.id} using provider: ${provider}`);
 
@@ -33,15 +175,15 @@ async function generateEmbedding(text: string, chatbot: any): Promise<number[]> 
       const apiKey = chatbot.geminiApiKey || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
       if (!apiKey) throw new Error("Missing Gemini API Key");
       
-      const genAI = new GoogleGenAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
-      const result = await model.embedContent(textToEmbed);
-      const values = result.embedding.values;
-      
-      if (values.length < 1536) {
-        return [...values, ...new Array(1536 - values.length).fill(0)];
-      }
-      return values.slice(0, 1536);
+      const genAI = new GoogleGenAI({ apiKey });
+      const result = await genAI.models.embedContent({
+        model: "text-embedding-004",
+        contents: [textToEmbed],
+        config: { outputDimensionality: VECTOR_DIMENSIONS },
+      });
+      const values = result.embeddings?.[0]?.values;
+      if (!values) throw new Error("Invalid Gemini embedding response format");
+      return normalizeEmbedding(values);
 
     } else if (provider === "custom" || provider === "openrouter") {
       const baseURL = provider === "openrouter" 
@@ -76,11 +218,7 @@ async function generateEmbedding(text: string, chatbot: any): Promise<number[]> 
         throw new Error("Invalid embedding response format");
       }
       const values = data.data[0].embedding;
-      
-      if (values.length < 1536) {
-        return [...values, ...new Array(1536 - values.length).fill(0)];
-      }
-      return values.slice(0, 1536);
+      return normalizeEmbedding(values);
 
     } else {
       // Default: OpenAI
@@ -185,14 +323,14 @@ export async function buildKnowledgeContext(
   const chatbot = await storage.getChatbot(chatbotId);
   if (!chatbot) return { context: "", strategy: "empty" };
 
-  const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content;
+  const retrievalQuery = buildRetrievalQuery(messages);
   
-  if (!lastUserMessage) {
+  if (!retrievalQuery) {
     return { context: "", strategy: "empty" };
   }
 
   try {
-    const queryEmbedding = await generateEmbedding(lastUserMessage, chatbot);
+    const queryEmbedding = await generateEmbedding(retrievalQuery, chatbot);
     const similarChunks = await storage.searchSimilarChunks(chatbotId, queryEmbedding, 5);
 
     if (similarChunks.length === 0) {
@@ -208,10 +346,18 @@ export async function buildKnowledgeContext(
 
     const context = `
 === REGLAS DE RESPUESTA ===
-1. Responde de forma natural y fluida usando la información de los fragmentos de abajo.
-2. NO menciones los nombres de los archivos ni pongas citas en tu respuesta final.
-3. Si la información no está abajo, indica que no tienes esa información.
-4. Mantén un tono profesional y directo.
+1. Usa la informacion de los fragmentos de abajo, pero respeta primero el flujo conversacional del system prompt.
+2. Si el usuario pide un listado, una categoria o pregunta "que servicios hay", responde SOLO con nombres de servicios. No incluyas "en que consiste", requisitos, costos, lugares, telefonos ni descripcion.
+3. Si el usuario selecciona un servicio, muestra SOLO el menu de apartados y pregunta que quiere conocer.
+4. Si el usuario pide un apartado especifico, responde SOLO ese apartado.
+5. Solo entrega todos los apartados si el usuario pide "ficha completa", "todos los datos" o "toda la informacion".
+6. NO menciones los nombres de los archivos ni pongas citas en tu respuesta final.
+7. Si la informacion no esta abajo, indica que no tienes esa informacion.
+8. Mantén un tono profesional, breve y directo.
+9. Si la consulta es ambigua, pide una aclaracion y ofrece opciones breves.
+10. Si la consulta esta fuera de tramites, servicios, programas, talleres o apoyos del DIF Zapopan, redirige al portal o dependencia oficial correspondiente.
+11. Si el usuario describe emergencia o riesgo inmediato, indica llamar al 911 y no intentes resolverlo como tramite.
+12. Si el usuario pide hablar con una persona, ayuda a identificar el tema y ofrece consultar lugar y contacto cuando exista en la base de conocimiento.
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}

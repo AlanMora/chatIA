@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -51,6 +52,9 @@ interface Message {
   role: string;
   content: string;
   responseTimeMs?: number | null;
+  knowledgeStrategy?: "empty" | "full" | "vector" | "deterministic" | null;
+  knowledgeSources?: string[] | null;
+  knowledgeChunks?: number | null;
   createdAt: string;
 }
 
@@ -66,6 +70,25 @@ interface ConversationWithMessages {
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
+
+function getKnowledgeStrategyLabel(strategy?: Message["knowledgeStrategy"]) {
+  switch (strategy) {
+    case "vector":
+      return "RAG vectorial";
+    case "deterministic":
+      return "Regla conversacional";
+    case "full":
+      return "Contexto completo";
+    case "empty":
+      return "Sin contexto";
+    default:
+      return null;
+  }
+}
+
+function getLastAssistantMessage(messages: Message[]) {
+  return [...messages].reverse().find((message) => message.role === "assistant");
+}
 
 export default function Analytics() {
   const { toast } = useToast();
@@ -410,6 +433,19 @@ export default function Analytics() {
                   <div className="text-sm text-muted-foreground">
                     {conv.messages.length} mensajes en esta conversación
                   </div>
+                  {getLastAssistantMessage(conv.messages)?.knowledgeStrategy && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline" className="text-[10px]">
+                        {getKnowledgeStrategyLabel(getLastAssistantMessage(conv.messages)?.knowledgeStrategy)}
+                      </Badge>
+                      {typeof getLastAssistantMessage(conv.messages)?.knowledgeChunks === "number" && (
+                        <span>{getLastAssistantMessage(conv.messages)?.knowledgeChunks} fragmento(s)</span>
+                      )}
+                      {(getLastAssistantMessage(conv.messages)?.knowledgeSources?.length || 0) > 0 && (
+                        <span>{getLastAssistantMessage(conv.messages)?.knowledgeSources?.length} fuente(s)</span>
+                      )}
+                    </div>
+                  )}
                   {conv.messages.length > 0 && (
                     <div className="mt-2 text-sm truncate">
                       <span className="text-muted-foreground">Último mensaje: </span>
@@ -464,6 +500,35 @@ export default function Analytics() {
                     content={msg.content}
                     role={msg.role === "user" ? "user" : "assistant"}
                   />
+                  {msg.role === 'assistant' && (msg.knowledgeStrategy || (msg.knowledgeSources?.length || 0) > 0) && (
+                    <div className="mt-3 rounded-md border border-border/60 bg-background/60 p-2 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {getKnowledgeStrategyLabel(msg.knowledgeStrategy) && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {getKnowledgeStrategyLabel(msg.knowledgeStrategy)}
+                          </Badge>
+                        )}
+                        {typeof msg.knowledgeChunks === "number" && (
+                          <span>{msg.knowledgeChunks} fragmento(s)</span>
+                        )}
+                      </div>
+                      {(msg.knowledgeSources?.length || 0) > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="font-medium text-foreground/80">Fuentes recuperadas</p>
+                          <ul className="space-y-1">
+                            {msg.knowledgeSources!.slice(0, 3).map((source) => (
+                              <li key={source} className="truncate" title={source}>
+                                {source}
+                              </li>
+                            ))}
+                          </ul>
+                          {msg.knowledgeSources!.length > 3 && (
+                            <p>+{msg.knowledgeSources!.length - 3} fuente(s) mas</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className={`text-xs mt-1 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                     {new Date(msg.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                     {msg.role === 'assistant' && msg.responseTimeMs && (

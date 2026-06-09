@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, count } from "drizzle-orm";
+import { eq, desc, sql, and, gte, count, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import type {
@@ -17,7 +17,22 @@ import type {
   Notification,
   InsertNotification,
   KnowledgeBaseChunk,
-  InsertKnowledgeBaseChunk,
+  ModelProvider,
+  InsertModelProvider,
+  ModelCatalog,
+  InsertModelCatalog,
+  ChatbotModelSettings,
+  InsertChatbotModelSettings,
+  AgentSkill,
+  InsertAgentSkill,
+  AgentTool,
+  InsertAgentTool,
+  ChatbotSkill,
+  InsertChatbotSkill,
+  ChatbotTool,
+  InsertChatbotTool,
+  ToolExecutionLog,
+  InsertToolExecutionLog,
 } from "@shared/schema";
 import {
   chatbots,
@@ -28,6 +43,14 @@ import {
   predefinedResponses,
   notifications,
   knowledgeBaseChunks,
+  modelProviders,
+  modelCatalog,
+  chatbotModelSettings,
+  agentSkills,
+  agentTools,
+  chatbotSkills,
+  chatbotTools,
+  toolExecutionLogs,
 } from "@shared/schema";
 
 export interface AnalyticsStats {
@@ -51,6 +74,14 @@ export interface DailyStats {
   messages: number;
 }
 
+export type InsertKnowledgeBaseChunk = {
+  itemId: number;
+  chatbotId: number;
+  content: string;
+  embedding: number[];
+  index: number;
+};
+
 export interface IStorage {
   getChatbot(id: number): Promise<Chatbot | undefined>;
   getAllChatbots(): Promise<Chatbot[]>;
@@ -63,6 +94,7 @@ export interface IStorage {
   getKnowledgeBaseItemsByChatbot(chatbotId: number): Promise<KnowledgeBaseItem[]>;
   createKnowledgeBaseItem(item: InsertKnowledgeBaseItem): Promise<KnowledgeBaseItem>;
   deleteKnowledgeBaseItem(id: number): Promise<void>;
+  deleteKnowledgeBaseItems(ids: number[]): Promise<void>;
 
   // Knowledge Base Chunks (RAG)
   createKnowledgeBaseChunk(chunk: InsertKnowledgeBaseChunk): Promise<KnowledgeBaseChunk>;
@@ -100,6 +132,7 @@ export interface IStorage {
   getConversationWithMessages(conversationId: number): Promise<ConversationWithMessages | undefined>;
   
   // Predefined responses
+  getPredefinedResponse(id: number): Promise<PredefinedResponse | undefined>;
   getPredefinedResponsesByChatbot(chatbotId: number): Promise<PredefinedResponse[]>;
   createPredefinedResponse(response: InsertPredefinedResponse): Promise<PredefinedResponse>;
   updatePredefinedResponse(id: number, updates: Partial<InsertPredefinedResponse>): Promise<PredefinedResponse | undefined>;
@@ -114,6 +147,27 @@ export interface IStorage {
   
   // Update conversation with visitor info
   updateWidgetConversation(id: number, updates: Partial<InsertWidgetConversation>): Promise<WidgetConversation | undefined>;
+
+  // Model catalog
+  getModelProviders(): Promise<ModelProvider[]>;
+  getModelCatalog(filters?: { type?: string; provider?: string }): Promise<ModelCatalog[]>;
+  getModelCatalogCount(): Promise<number>;
+  replaceModelProviders(providers: InsertModelProvider[]): Promise<void>;
+  replaceModelCatalog(models: InsertModelCatalog[], providerId?: string): Promise<void>;
+  getChatbotModelSettings(chatbotId: number): Promise<ChatbotModelSettings | undefined>;
+  upsertChatbotModelSettings(settings: InsertChatbotModelSettings): Promise<ChatbotModelSettings>;
+
+  // Skills and tools
+  getAgentSkills(): Promise<AgentSkill[]>;
+  getAgentTools(): Promise<AgentTool[]>;
+  upsertAgentSkills(skills: InsertAgentSkill[]): Promise<void>;
+  upsertAgentTools(tools: InsertAgentTool[]): Promise<void>;
+  getChatbotSkills(chatbotId: number): Promise<ChatbotSkill[]>;
+  getChatbotTools(chatbotId: number): Promise<ChatbotTool[]>;
+  setChatbotSkills(chatbotId: number, skillIds: string[]): Promise<ChatbotSkill[]>;
+  setChatbotTools(chatbotId: number, toolIds: string[]): Promise<ChatbotTool[]>;
+  createToolExecutionLog(log: InsertToolExecutionLog): Promise<ToolExecutionLog>;
+  getToolExecutionLogs(chatbotId: number, limit?: number): Promise<ToolExecutionLog[]>;
 }
 
 const pool = new pg.Pool({
@@ -174,6 +228,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteKnowledgeBaseItem(id: number): Promise<void> {
     await db.delete(knowledgeBaseItems).where(eq(knowledgeBaseItems.id, id));
+  }
+
+  async deleteKnowledgeBaseItems(ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
+    await db.delete(knowledgeBaseItems).where(inArray(knowledgeBaseItems.id, ids));
   }
 
   // Knowledge Base Chunks (RAG)
@@ -597,6 +656,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Predefined responses
+  async getPredefinedResponse(id: number): Promise<PredefinedResponse | undefined> {
+    const result = await db.select().from(predefinedResponses).where(eq(predefinedResponses.id, id));
+    return result[0];
+  }
+
   async getPredefinedResponsesByChatbot(chatbotId: number): Promise<PredefinedResponse[]> {
     return db.select().from(predefinedResponses)
       .where(eq(predefinedResponses.chatbotId, chatbotId))
@@ -660,6 +724,163 @@ export class DatabaseStorage implements IStorage {
       .where(eq(widgetConversations.id, id))
       .returning();
     return result[0];
+  }
+
+  // Model catalog
+  async getModelProviders(): Promise<ModelProvider[]> {
+    return db.select().from(modelProviders).orderBy(modelProviders.name);
+  }
+
+  async getModelCatalog(filters: { type?: string; provider?: string } = {}): Promise<ModelCatalog[]> {
+    const conditions = [];
+    if (filters.type) conditions.push(eq(modelCatalog.type, filters.type));
+    if (filters.provider) conditions.push(eq(modelCatalog.providerId, filters.provider));
+
+    if (conditions.length > 0) {
+      return db
+        .select()
+        .from(modelCatalog)
+        .where(and(...conditions))
+        .orderBy(modelCatalog.providerId, modelCatalog.type, desc(modelCatalog.isDefault), modelCatalog.label);
+    }
+
+    return db
+      .select()
+      .from(modelCatalog)
+      .orderBy(modelCatalog.providerId, modelCatalog.type, desc(modelCatalog.isDefault), modelCatalog.label);
+  }
+
+  async getModelCatalogCount(): Promise<number> {
+    const result = await db.select({ count: count() }).from(modelCatalog);
+    return result[0]?.count || 0;
+  }
+
+  async replaceModelProviders(providers: InsertModelProvider[]): Promise<void> {
+    await db.delete(modelProviders);
+    if (providers.length > 0) {
+      await db.insert(modelProviders).values(providers);
+    }
+  }
+
+  async replaceModelCatalog(models: InsertModelCatalog[], providerId?: string): Promise<void> {
+    if (providerId) {
+      await db.delete(modelCatalog).where(eq(modelCatalog.providerId, providerId));
+    } else {
+      await db.delete(modelCatalog);
+    }
+
+    if (models.length > 0) {
+      await db.insert(modelCatalog).values(models);
+    }
+  }
+
+  async getChatbotModelSettings(chatbotId: number): Promise<ChatbotModelSettings | undefined> {
+    const result = await db.select().from(chatbotModelSettings).where(eq(chatbotModelSettings.chatbotId, chatbotId));
+    return result[0];
+  }
+
+  async upsertChatbotModelSettings(settings: InsertChatbotModelSettings): Promise<ChatbotModelSettings> {
+    const existing = await this.getChatbotModelSettings(settings.chatbotId);
+
+    if (existing) {
+      const result = await db
+        .update(chatbotModelSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(chatbotModelSettings.chatbotId, settings.chatbotId))
+        .returning();
+      return result[0];
+    }
+
+    const result = await db.insert(chatbotModelSettings).values(settings).returning();
+    return result[0];
+  }
+
+  async getAgentSkills(): Promise<AgentSkill[]> {
+    return db.select().from(agentSkills).orderBy(agentSkills.category, agentSkills.name);
+  }
+
+  async getAgentTools(): Promise<AgentTool[]> {
+    return db.select().from(agentTools).orderBy(agentTools.category, agentTools.name);
+  }
+
+  async upsertAgentSkills(skills: InsertAgentSkill[]): Promise<void> {
+    for (const skill of skills) {
+      await db
+        .insert(agentSkills)
+        .values(skill)
+        .onConflictDoUpdate({
+          target: agentSkills.id,
+          set: {
+            name: skill.name,
+            description: skill.description,
+            instructions: skill.instructions,
+            category: skill.category,
+            isSystem: skill.isSystem,
+            isActive: skill.isActive,
+          },
+        });
+    }
+  }
+
+  async upsertAgentTools(tools: InsertAgentTool[]): Promise<void> {
+    for (const tool of tools) {
+      await db
+        .insert(agentTools)
+        .values(tool)
+        .onConflictDoUpdate({
+          target: agentTools.id,
+          set: {
+            name: tool.name,
+            description: tool.description,
+            category: tool.category,
+            permission: tool.permission,
+            requiresConfirmation: tool.requiresConfirmation,
+            schema: tool.schema,
+            isSystem: tool.isSystem,
+            isActive: tool.isActive,
+          },
+        });
+    }
+  }
+
+  async getChatbotSkills(chatbotId: number): Promise<ChatbotSkill[]> {
+    return db.select().from(chatbotSkills).where(eq(chatbotSkills.chatbotId, chatbotId));
+  }
+
+  async getChatbotTools(chatbotId: number): Promise<ChatbotTool[]> {
+    return db.select().from(chatbotTools).where(eq(chatbotTools.chatbotId, chatbotId));
+  }
+
+  async setChatbotSkills(chatbotId: number, skillIds: string[]): Promise<ChatbotSkill[]> {
+    await db.delete(chatbotSkills).where(eq(chatbotSkills.chatbotId, chatbotId));
+    if (skillIds.length === 0) return [];
+    return db
+      .insert(chatbotSkills)
+      .values(skillIds.map((skillId) => ({ chatbotId, skillId, isEnabled: true })))
+      .returning();
+  }
+
+  async setChatbotTools(chatbotId: number, toolIds: string[]): Promise<ChatbotTool[]> {
+    await db.delete(chatbotTools).where(eq(chatbotTools.chatbotId, chatbotId));
+    if (toolIds.length === 0) return [];
+    return db
+      .insert(chatbotTools)
+      .values(toolIds.map((toolId) => ({ chatbotId, toolId, isEnabled: true })))
+      .returning();
+  }
+
+  async createToolExecutionLog(log: InsertToolExecutionLog): Promise<ToolExecutionLog> {
+    const result = await db.insert(toolExecutionLogs).values(log).returning();
+    return result[0];
+  }
+
+  async getToolExecutionLogs(chatbotId: number, limit: number = 50): Promise<ToolExecutionLog[]> {
+    return db
+      .select()
+      .from(toolExecutionLogs)
+      .where(eq(toolExecutionLogs.chatbotId, chatbotId))
+      .orderBy(desc(toolExecutionLogs.createdAt))
+      .limit(limit);
   }
 }
 

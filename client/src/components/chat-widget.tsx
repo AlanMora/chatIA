@@ -19,13 +19,26 @@ interface ChatWidgetProps {
   isPreview?: boolean;
 }
 
+const DEFAULT_WELCOME_MESSAGE = `Hola, soy SofIA, asistente virtual del DIF Zapopan.
+
+Puedo orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles.
+
+Puedes escribirme el tramite o servicio que buscas, pedir un listado por tema o grupo de atencion, o seleccionar un apartado como requisitos, costos, horarios, lugar y contacto.
+
+Elige una opcion o escribe tu pregunta:
+
+1. Buscar un tramite o servicio
+2. No se que necesito
+3. Ver por grupo de atencion
+4. Ver programas o talleres`;
+
 export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(isPreview);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: chatbot.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
+      content: chatbot.welcomeMessage || DEFAULT_WELCOME_MESSAGE,
     },
   ]);
   const [input, setInput] = useState("");
@@ -44,7 +57,7 @@ export function ChatWidget({ chatbot, isPreview = false }: ChatWidgetProps) {
         {
           id: "welcome",
           role: "assistant",
-          content: chatbot.welcomeMessage || "¡Hola! ¿En qué puedo ayudarte?",
+          content: chatbot.welcomeMessage || DEFAULT_WELCOME_MESSAGE,
         },
       ]);
     }
