@@ -975,12 +975,10 @@ export async function registerRoutes(
       const messages = await storage.getWidgetMessagesByConversation(conversation.id);
       
       // Retrieve only the most relevant knowledge snippets so the prompt stays usable
-      const knowledgeItems = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
-      console.log(`[Widget Chat] Chatbot ${chatbotId} has ${knowledgeItems.length} knowledge base items`);
-      const knowledgeContextResult = buildKnowledgeContext(knowledgeItems, messages);
+      const knowledgeContextResult = await buildKnowledgeContext(chatbotId, messages);
       const knowledgeContext = knowledgeContextResult.context;
       console.log(
-        `[Widget Chat] Knowledge retrieval strategy=${knowledgeContextResult.strategy} items=${knowledgeContextResult.totalItems} chunks=${knowledgeContextResult.totalChunks} selected=${knowledgeContextResult.selectedChunks} contextChars=${knowledgeContextResult.contextChars}`,
+        `[Widget Chat] Knowledge retrieval strategy=${knowledgeContextResult.strategy} chunksFound=${knowledgeContextResult.chunksFound || 0}`,
       );
 
       // Set up SSE
