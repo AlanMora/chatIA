@@ -30,7 +30,7 @@ export const chatbots = pgTable("chatbots", {
   name: text("name").notNull(),
   description: text("description"),
   systemPrompt: text("system_prompt").default("You are a helpful assistant."),
-  aiModel: text("ai_model").default("gpt-5"),
+  aiModel: text("ai_model").default("gpt-4o-mini"),
   aiProvider: text("ai_provider").default("openai"),
   // Custom/Self-hosted model settings
   customEndpoint: text("custom_endpoint"),

@@ -130,7 +130,7 @@ export function registerAudioRoutes(app: Express): void {
     }
   });
 
-  // Voice chat using separate text model (GPT-5) + TTS pipeline
+  // Voice chat using separate text model (GPT-4o) + TTS pipeline
   // Streams sentences to TTS as they're generated for lower latency
   // Supports multilingual sentence detection via locale parameter
   app.post("/api/conversations/:id/voice-stream", async (req: Request, res: Response) => {

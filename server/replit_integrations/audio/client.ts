@@ -324,7 +324,7 @@ export async function* voiceChatWithTextModel(
     inputFormat = "wav",
     systemPrompt = "You are a helpful assistant.",
     chatHistory = [],
-    textModel = "gpt-5", // the newest OpenAI model is "gpt-5" which was released August 7, 2025
+    textModel = "gpt-4o", // the newest OpenAI model
     locale = "en",
   } = options;
 

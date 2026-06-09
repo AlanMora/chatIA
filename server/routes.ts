@@ -988,7 +988,7 @@ export async function registerRoutes(
 
       let fullResponse = "";
       const aiProvider = chatbot.aiProvider || "openai";
-      const aiModel = chatbot.aiModel || "gpt-5";
+      const aiModel = chatbot.aiModel || "gpt-4o-mini";
       const startTime = Date.now();
 
       if (aiProvider === "openrouter") {
@@ -1141,13 +1141,15 @@ export async function registerRoutes(
 
       res.write(`data: ${JSON.stringify({ done: true, responseTimeMs })}\n\n`);
       res.end();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in widget chat:", error);
+      const errorMessage = error?.error?.message || error?.message || "Chat error";
+      
       if (res.headersSent) {
-        res.write(`data: ${JSON.stringify({ error: "Chat error" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
         res.end();
       } else {
-        res.status(500).json({ error: "Chat failed" });
+        res.status(500).json({ error: errorMessage });
       }
     }
   });

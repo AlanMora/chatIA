@@ -1314,7 +1314,10 @@
         body: JSON.stringify({ message: text, sessionId: sessionId })
       });
       
-      if (!response.ok) throw new Error('Chat request failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Chat request failed');
+      }
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -1334,19 +1337,24 @@
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
+              if (data.error) {
+                throw new Error(data.error);
+              }
               if (data.content) {
                 botMessage.content += data.content;
                 render();
               }
-            } catch (e) {}
+            } catch (e) {
+              if (e.message !== 'Unexpected end of JSON input') throw e;
+            }
           }
         }
       }
     } catch (error) {
       console.error('ChatBot Widget: Chat error', error);
       hasError = true;
-      errorMessage = 'No se pudo conectar. Por favor, verifica tu conexión e intenta de nuevo.';
-      messages.push({ role: 'assistant', content: 'Lo siento, hubo un problema de conexión. Por favor, intenta de nuevo.' });
+      errorMessage = 'Error: ' + error.message;
+      messages.push({ role: 'assistant', content: 'Lo siento, hubo un problema: ' + error.message });
     } finally {
       isLoading = false;
       if (messages.length > 4 && !hasRated) {
