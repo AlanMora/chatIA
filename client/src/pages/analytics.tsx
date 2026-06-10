@@ -25,6 +25,7 @@ import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { ChatMessageContent } from "@/components/chat-message-content";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface AnalyticsStats {
   totalConversations: number;
@@ -90,6 +91,55 @@ function getLastAssistantMessage(messages: Message[]) {
   return [...messages].reverse().find((message) => message.role === "assistant");
 }
 
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await apiRequest("GET", url);
+  return response.json() as Promise<T>;
+}
+
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asAnalyticsStats(value: unknown): AnalyticsStats {
+  if (!value || typeof value !== "object") {
+    return {
+      totalConversations: 0,
+      totalMessages: 0,
+      userMessages: 0,
+      assistantMessages: 0,
+      conversationsToday: 0,
+      messagesToday: 0,
+    };
+  }
+
+  const stats = value as Partial<AnalyticsStats>;
+  return {
+    totalConversations: Number(stats.totalConversations) || 0,
+    totalMessages: Number(stats.totalMessages) || 0,
+    userMessages: Number(stats.userMessages) || 0,
+    assistantMessages: Number(stats.assistantMessages) || 0,
+    conversationsToday: Number(stats.conversationsToday) || 0,
+    messagesToday: Number(stats.messagesToday) || 0,
+  };
+}
+
+function asMetrics(value: unknown): Metrics {
+  if (!value || typeof value !== "object") {
+    return {
+      averageResponseTimeMs: null,
+      averageRating: null,
+    };
+  }
+
+  const metrics = value as Partial<Metrics>;
+  return {
+    averageResponseTimeMs:
+      typeof metrics.averageResponseTimeMs === "number" ? metrics.averageResponseTimeMs : null,
+    averageRating:
+      typeof metrics.averageRating === "number" ? metrics.averageRating : null,
+  };
+}
+
 export default function Analytics() {
   const { toast } = useToast();
   const [selectedChatbot, setSelectedChatbot] = useState<string>("all");
@@ -117,40 +167,43 @@ export default function Analytics() {
   const { data: stats, isLoading: statsLoading } = useQuery<AnalyticsStats>({
     queryKey: ["/api/analytics/stats", selectedChatbot, days],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/stats?days=${days}${chatbotIdParam}`);
-      return res.json();
+      return asAnalyticsStats(
+        await fetchJson<unknown>(`/api/analytics/stats?days=${days}${chatbotIdParam}`),
+      );
     },
   });
 
   const { data: metrics, isLoading: metricsLoading } = useQuery<Metrics>({
     queryKey: ["/api/analytics/metrics", selectedChatbot, days],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/metrics?days=${days}${chatbotIdParam}`);
-      return res.json();
+      return asMetrics(
+        await fetchJson<unknown>(`/api/analytics/metrics?days=${days}${chatbotIdParam}`),
+      );
     },
   });
 
   const { data: dailyStats, isLoading: dailyLoading } = useQuery<DailyStats[]>({
     queryKey: ["/api/analytics/daily", selectedChatbot, days],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/daily?days=${days}${chatbotIdParam}`);
-      return res.json();
+      return asArray<DailyStats>(
+        await fetchJson<unknown>(`/api/analytics/daily?days=${days}${chatbotIdParam}`),
+      );
     },
   });
 
   const { data: conversations, isLoading: conversationsLoading } = useQuery<ConversationWithMessages[]>({
     queryKey: ["/api/analytics/conversations", selectedChatbot],
     queryFn: async () => {
-      const res = await fetch(`/api/analytics/conversations?limit=10${chatbotIdParam}`);
-      return res.json();
+      return asArray<ConversationWithMessages>(
+        await fetchJson<unknown>(`/api/analytics/conversations?limit=10${chatbotIdParam}`),
+      );
     },
   });
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const res = await fetch('/api/export');
-      if (!res.ok) throw new Error('Export failed');
+      const res = await apiRequest("GET", "/api/export");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -169,6 +222,9 @@ export default function Analytics() {
   };
 
   const isLoading = statsLoading || dailyLoading || conversationsLoading || metricsLoading;
+  const safeChatbots = asArray<Chatbot>(chatbots);
+  const safeDailyStats = asArray<DailyStats>(dailyStats);
+  const safeConversations = asArray<ConversationWithMessages>(conversations);
 
   const formatResponseTime = (ms: number | null) => {
     if (ms === null) return "—";
@@ -220,10 +276,10 @@ export default function Analytics() {
     { name: "Bot", value: stats?.assistantMessages || 0 },
   ];
 
-  const chartData = dailyStats?.map(d => ({
+  const chartData = safeDailyStats.map(d => ({
     ...d,
     date: new Date(d.date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' }),
-  })) || [];
+  }));
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -253,7 +309,7 @@ export default function Analytics() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los Chatbots</SelectItem>
-                {chatbots?.map((chatbot) => (
+                {safeChatbots.map((chatbot) => (
                   <SelectItem key={chatbot.id} value={chatbot.id.toString()}>
                     {chatbot.name}
                   </SelectItem>
@@ -410,9 +466,9 @@ export default function Analytics() {
                 <Skeleton key={i} className="h-20 w-full" />
               ))}
             </div>
-          ) : (conversations?.length || 0) > 0 ? (
+          ) : (safeConversations.length || 0) > 0 ? (
             <div className="space-y-4">
-              {conversations?.map((conv) => (
+              {safeConversations.map((conv) => (
                 <div 
                   key={conv.conversation.id} 
                   className="rounded-lg border p-4 cursor-pointer hover-elevate"
