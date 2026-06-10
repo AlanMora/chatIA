@@ -11,7 +11,7 @@ import { registerElevenLabsRoutes } from "./elevenlabs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { buildKnowledgeContext, processKnowledgeItem } from "./knowledge-base";
 import { ELEVENLABS_VOICE_ENABLED } from "./feature-flags";
-import { buildRuntimeSystemPrompt, getDeterministicWidgetResponse } from "./conversation-policy";
+import { buildRuntimeSystemPrompt, classifyConversationIntent, getDeterministicWidgetResponse } from "./conversation-policy";
 import { buildCapabilitiesPrompt, ensureAgentCapabilitiesSeeded } from "./agent-capabilities";
 import {
   filterModelCatalog,
@@ -86,6 +86,46 @@ const gemini = new GoogleGenAI({
     baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
   },
 });
+
+function extractBriefServiceDescriptionFromContext(context: string): string | null {
+  const fragments = context
+    .split("=== FRAGMENTOS DE CONOCIMIENTO ===")[1]
+    ?.split("=== FIN DE FRAGMENTOS ===")[0]
+    ?.split(/\n\n---\n\n/) || [];
+
+  for (const fragment of fragments) {
+    const cleaned = fragment
+      .replace(/\r/g, "")
+      .trim()
+      .replace(/^\[DOCUMENTO:[^\]]+\]:\s*/i, "");
+
+    const explicitSection = cleaned.match(/(?:en qu[eé] consiste|descripci[oó]n|objetivo)\s*:?\s*([\s\S]{20,500}?)(?:\n\s*(?:a qui[eé]n va dirigido|requisitos?|costos?|horario|lugar|contacto|nota)|$)/i);
+    const candidate = explicitSection?.[1] || cleaned;
+    const sentence = candidate
+      .split(/\n/)
+      .map((line) => line.trim().replace(/^[-*]\s*/, ""))
+      .filter((line) => line.length > 0)
+      .find((line) =>
+        line.length >= 25 &&
+        line.length <= 220 &&
+        !/^(requisitos?|costos?|horario|lugar|contacto|nota|documento|tel[eé]fono|direcci[oó]n)\b/i.test(line),
+      );
+
+    if (sentence) {
+      return sentence.replace(/\s+/g, " ").replace(/[.;:]\s*$/, ".");
+    }
+  }
+
+  return null;
+}
+
+function enrichDeterministicServiceMenu(response: string, description: string | null): string {
+  if (!description) return response;
+  return response.replace(
+    "Te acompano con este servicio. Puedo mostrarte la informacion por partes para que sea mas facil revisarla.",
+    `En breve: ${description}`,
+  );
+}
 
 const knowledgeUploadDir = path.resolve(process.cwd(), "uploads", "knowledge-base");
 
@@ -1508,7 +1548,19 @@ export async function registerRoutes(
 
       // Get conversation history
       const messages = await storage.getWidgetMessagesByConversation(conversation.id);
-      const deterministicResponse = getDeterministicWidgetResponse(messages);
+      let deterministicResponse = getDeterministicWidgetResponse(messages);
+      let deterministicKnowledgeResult: Awaited<ReturnType<typeof buildKnowledgeContext>> | null = null;
+      const currentIntent = classifyConversationIntent(message, messages);
+
+      if (
+        deterministicResponse &&
+        currentIntent === "direct_service" &&
+        deterministicResponse.includes("Te acompano con este servicio")
+      ) {
+        deterministicKnowledgeResult = await buildKnowledgeContext(chatbotId, messages);
+        const briefDescription = extractBriefServiceDescriptionFromContext(deterministicKnowledgeResult.context);
+        deterministicResponse = enrichDeterministicServiceMenu(deterministicResponse, briefDescription);
+      }
       
       // Retrieve only the most relevant knowledge snippets so the prompt stays usable
       if (deterministicResponse) {
@@ -1524,9 +1576,9 @@ export async function registerRoutes(
           role: "assistant",
           content: deterministicResponse,
           responseTimeMs,
-          knowledgeStrategy: "deterministic",
-          knowledgeSources: [],
-          knowledgeChunks: 0,
+          knowledgeStrategy: deterministicKnowledgeResult ? "vector" : "deterministic",
+          knowledgeSources: deterministicKnowledgeResult?.sources || [],
+          knowledgeChunks: deterministicKnowledgeResult?.chunksFound || 0,
         });
 
         res.write(`data: ${JSON.stringify({ content: deterministicResponse })}\n\n`);
@@ -1690,6 +1742,13 @@ export async function registerRoutes(
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
           }
         }
+      }
+
+      if (!fullResponse.trim()) {
+        fullResponse = knowledgeContextResult.chunksFound && knowledgeContextResult.chunksFound > 0
+          ? "No pude generar una respuesta con la informacion disponible. Intenta pedir un apartado especifico como requisitos, costos, horarios, lugar y contacto, o ficha completa."
+          : "No encontre informacion suficiente en la base de conocimiento para responder eso. Puedes intentar con el nombre del tramite, servicio, programa o taller.";
+        res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
       }
 
       // Save assistant message with response time

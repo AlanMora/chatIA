@@ -550,8 +550,7 @@
   let showLeadForm = false;
   let leadSubmitted = localStorage.getItem('chatbot-lead-' + chatbotId) === 'true';
   let visitorData = JSON.parse(localStorage.getItem('chatbot-visitor-' + chatbotId) || '{}');
-  let sessionId = localStorage.getItem('chatbot-session-' + chatbotId) || generateId();
-  localStorage.setItem('chatbot-session-' + chatbotId, sessionId);
+  let sessionId = generateId();
   
   function generateId() {
     return 'xxxx-xxxx-xxxx'.replace(/x/g, function() {

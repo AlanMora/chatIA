@@ -38,6 +38,7 @@ Crear un agente conversacional de nivel gubernamental que sea:
 - [Plan por fases](docs/PLAN_IMPLEMENTACION.md)
 - [Control de avance](docs/CONTROL_AVANCE.md)
 - [Desarrollo local en Windows](DEV_WINDOWS.md)
+- [Deploy en Proxmox](docs/DEPLOY_PROXMOX.md)
 
 ## Deploy Docker
 

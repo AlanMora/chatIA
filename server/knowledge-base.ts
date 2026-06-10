@@ -2,7 +2,7 @@ import type { KnowledgeBaseItem, KnowledgeBaseChunk } from "@shared/schema";
 import OpenAI from "openai";
 import { storage } from "./storage";
 import { GoogleGenAI } from "@google/genai";
-import { classifyConversationIntent, extractServiceNameFromSectionMenu } from "./conversation-policy";
+import { classifyConversationIntent, extractServiceNameFromSectionMenu, getRequestedSectionLabel } from "./conversation-policy";
 
 type MessageLike = {
   role: string;
@@ -32,9 +32,10 @@ function buildRetrievalQuery(messages: MessageLike[]): string | null {
     .map(m => extractServiceNameFromSectionMenu(m.content))
     .find((serviceName): serviceName is string => Boolean(serviceName));
   const intent = classifyConversationIntent(lastUserMessage, messages);
+  const requestedSection = getRequestedSectionLabel(lastUserMessage, messages);
 
   if (activeService && (intent === "section_request" || intent === "complete_record")) {
-    return `${activeService} ${lastUserMessage}`;
+    return `${activeService} ${requestedSection || lastUserMessage}`;
   }
 
   return lastUserMessage;
@@ -348,7 +349,7 @@ export async function buildKnowledgeContext(
 === REGLAS DE RESPUESTA ===
 1. Usa la informacion de los fragmentos de abajo, pero respeta primero el flujo conversacional del system prompt.
 2. Si el usuario pide un listado, una categoria o pregunta "que servicios hay", responde SOLO con nombres de servicios. No incluyas "en que consiste", requisitos, costos, lugares, telefonos ni descripcion.
-3. Si el usuario selecciona un servicio, muestra SOLO el menu de apartados y pregunta que quiere conocer.
+3. Si el usuario selecciona un servicio o escribe directamente el nombre de un servicio, muestra el nombre, una descripcion breve basada en los fragmentos y despues el menu de apartados.
 4. Si el usuario pide un apartado especifico, responde SOLO ese apartado.
 5. Solo entrega todos los apartados si el usuario pide "ficha completa", "todos los datos" o "toda la informacion".
 6. NO menciones los nombres de los archivos ni pongas citas en tu respuesta final.
@@ -358,6 +359,21 @@ export async function buildKnowledgeContext(
 10. Si la consulta esta fuera de tramites, servicios, programas, talleres o apoyos del DIF Zapopan, redirige al portal o dependencia oficial correspondiente.
 11. Si el usuario describe emergencia o riesgo inmediato, indica llamar al 911 y no intentes resolverlo como tramite.
 12. Si el usuario pide hablar con una persona, ayuda a identificar el tema y ofrece consultar lugar y contacto cuando exista en la base de conocimiento.
+13. Para servicio seleccionado usa exactamente este formato y no uses corchetes:
+[Nombre del servicio]
+
+En breve: [una frase breve sobre de que trata]
+
+Que informacion quieres conocer?
+
+1. En que consiste
+2. A quien va dirigido
+3. Requisitos
+4. Costos
+5. Horario, vigencia o convocatoria
+6. Lugar y contacto
+7. Nota importante
+8. Ficha completa
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}

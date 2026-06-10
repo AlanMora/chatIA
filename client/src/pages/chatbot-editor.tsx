@@ -148,20 +148,19 @@ const DEFAULT_DESCRIPTION =
 
 const DEFAULT_WELCOME_MESSAGE = `Hola, soy SofIA, asistente virtual del DIF Zapopan.
 
-Puedo orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles.
+Estoy aqui para orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles.
 
-Puedes usarme asi:
+Cuentame que necesitas y te acompano paso a paso. Puedo ayudarte a encontrar el servicio correcto y despues mostrarte solo el apartado que te interesa.
 
-1. Escribe el tramite o servicio que buscas.
-   Ejemplo: platicas prematrimoniales, INAPAM, ayuda alimentaria.
+Puedes escribirme, por ejemplo:
 
-2. Pide un listado por tema o grupo de atencion.
-   Ejemplo: servicios para personas mayores, apoyos alimentarios, talleres deportivos.
+- Platicas prematrimoniales
+- INAPAM
+- Ayuda alimentaria
+- Servicios para personas mayores
+- Talleres deportivos
 
-3. Cuando elijas un servicio, puedo mostrarte solo el apartado que necesitas:
-   requisitos, costos, horarios, lugar y contacto, o ficha completa.
-
-Elige una opcion o escribe tu pregunta:
+Para empezar, elige una opcion o escribe tu pregunta:
 
 1. Buscar un tramite o servicio
 2. No se que necesito

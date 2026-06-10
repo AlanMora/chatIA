@@ -26,6 +26,11 @@ export type ConversationState =
   | "emergency"
   | "unknown";
 
+type ServiceOption = {
+  name: string;
+  description?: string;
+};
+
 const SECTION_KEYWORDS =
   /\b(requisitos?|costos?|cuanto|cu[aá]nto|horario|vigencia|convocatoria|lugar|donde queda|d[oó]nde queda|direccion|direcci[oó]n|telefono|tel[eé]fono|contacto|en que consiste|a quien va dirigido)\b/i;
 
@@ -33,10 +38,10 @@ const COMPLETE_RECORD_KEYWORDS =
   /\b(ficha completa|todos los datos|toda la informacion|toda la informaci[oó]n|detalle completo|proceso completo)\b/i;
 
 const LIST_KEYWORDS =
-  /\b(que servicios hay|qu[eé] servicios hay|cu[aá]les servicios|listado|tr[aá]mites y(?:\/o)? servicios|que apoyos|qu[eé] apoyos|servicios sobre|servicios del|servicios para|ver programas|ver por grupo)\b/i;
+  /\b(que servicios hay|qu[eé] servicios hay|cu[aá]les servicios|listado|tr[aá]mites y(?:\/o)? servicios|que apoyos|qu[eé] apoyos|servicios sobre|servicios del|servicios en|servicios para|ver programas|ver por grupo)\b/i;
 
 const DIRECT_SERVICE_MARKERS =
-  /\b(afiliaci[oó]n|pl[aá]ticas?|prematrimoniales?|programa|taller(?:es)?|solicitud|reporte|servicio m[eé]dico|alimentaci[oó]n escolar|inapam)\b/i;
+  /\b(afiliaci[oó]n|pl[aá]ticas?|prematrimoniales?|programa|taller(?:es)?|solicitud|reporte|servicios? b[aá]sicos|servicio m[eé]dico|alimentaci[oó]n escolar|inapam)\b/i;
 
 const GREETING_KEYWORDS =
   /^(hola|buenos dias|buenas tardes|buenas noches|buen dia|hey|saludos)[!.?\s]*$/i;
@@ -56,8 +61,23 @@ const OUT_OF_SCOPE_KEYWORDS =
 const COMPLEMENTARY_KEYWORDS =
   /\b(que es el dif|qu[eé] es el dif|que hace el dif|qu[eé] hace el dif|como funciona|c[oó]mo funciona|base de conocimiento|servicios publicos|servicios p[uú]blicos|informacion general|informaci[oó]n general)\b/i;
 
-export function buildServiceSectionMenu(serviceName: string): string {
+const SECTION_BY_NUMBER: Record<number, string> = {
+  1: "En que consiste",
+  2: "A quien va dirigido",
+  3: "Requisitos",
+  4: "Costos",
+  5: "Horario, vigencia o convocatoria",
+  6: "Lugar y contacto",
+  7: "Nota importante",
+  8: "Ficha completa",
+};
+
+export function buildServiceSectionMenu(serviceName: string, description?: string): string {
+  const cleanDescription = description?.trim();
+
   return `${serviceName}
+
+${cleanDescription ? `En breve: ${cleanDescription}` : "Te acompano con este servicio. Puedo mostrarte la informacion por partes para que sea mas facil revisarla."}
 
 Que informacion quieres conocer?
 
@@ -70,7 +90,9 @@ Que informacion quieres conocer?
 7. Nota importante
 8. Ficha completa
 
-Puedes escribir el numero o el apartado. Tambien puedes pedir "ficha completa".`;
+Puedes escribir el numero o el apartado. Tambien puedes pedir "ficha completa".
+
+Si no sabes por donde empezar, te sugiero revisar primero "En que consiste" o "Requisitos".`;
 }
 
 export function buildAmbiguousHelpResponse(): string {
@@ -125,24 +147,114 @@ Para atencion con una persona, indica el tema principal:
 Si ya sabes el servicio, escribe su nombre y te muestro lugar y contacto disponibles en la base de conocimiento.`;
 }
 
-export function extractServiceOptionsFromList(content: string): string[] {
+export function isInitialWelcomeMenu(content: string): boolean {
+  return /buscar un tramite o servicio/i.test(content) &&
+    /no se que necesito/i.test(content) &&
+    /ver por grupo de atencion/i.test(content) &&
+    /ver programas o talleres/i.test(content);
+}
+
+export function buildInitialMenuOptionResponse(option: number): string | null {
+  if (option === 1) {
+    return `Escribe el nombre del tramite, servicio, programa, taller o apoyo que buscas.
+
+Ejemplos:
+1. Platicas prematrimoniales
+2. INAPAM
+3. Ayuda alimentaria
+4. Talleres deportivos`;
+  }
+
+  if (option === 2) {
+    return buildAmbiguousHelpResponse();
+  }
+
+  if (option === 3) {
+    return `Puedo ayudarte por grupo de atencion. Escribe el numero o el grupo que quieres revisar:
+
+1. Personas mayores
+2. Ninas, ninos y adolescentes
+3. Personas con discapacidad
+4. Familias
+5. Mujeres
+6. Personas en situacion vulnerable`;
+  }
+
+  if (option === 4) {
+    return `Puedo buscar programas o talleres disponibles.
+
+Puedes escribir, por ejemplo:
+1. Talleres deportivos
+2. Talleres recreativos
+3. Talleres educativos
+4. Apoyos alimentarios
+5. Programas para personas mayores`;
+  }
+
+  return null;
+}
+
+function normalizeServiceLine(line: string): string {
+  return line.trim().replace(/^\*+\s*/, "").replace(/\*+$/, "").replace(/^\d+[\).\-\s]+/, "").trim();
+}
+
+function isLikelyDescriptionLine(line: string): boolean {
+  return line.length > 0 && /[.!?]$/.test(line) && line.split(/\s+/).length >= 3;
+}
+
+function isLikelyServiceHeading(line: string): boolean {
+  return line.length > 0 && !/[.!?:]$/.test(line) && line.split(/\s+/).length <= 10;
+}
+
+export function extractServiceOptionsWithDescriptionsFromList(content: string): ServiceOption[] {
   const isServiceSelectionPrompt =
     /cual(?:es)? de estos servicios|cual quieres consultar|escribir el numero o el nombre|opciones relacionadas/i.test(content);
   const isSectionMenu =
     /que informacion quieres conocer|ficha completa|en que consiste/i.test(content) &&
     /requisitos|costos|lugar y contacto/i.test(content);
 
-  if (!isServiceSelectionPrompt || isSectionMenu) return [];
+  if (isSectionMenu) return [];
 
   const ignoredLine = /^[¿?]?(servicios ofrecidos|encontre estas opciones|cual|puedes escribir|escribe el numero|centro de estancias)/i;
-  return content
+  const rawLines = content
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .map((line) => line.replace(/^\d+[\).\-\s]+/, "").trim())
-    .filter((line) => line.length > 0)
+    .map(normalizeServiceLine)
+    .filter((line) => line.length > 0);
+
+  const numberedOptions = rawLines
     .filter((line) => !ignoredLine.test(line))
     .filter((line) => !line.endsWith(":"))
+    .filter((line) => !/[.!?]$/.test(line))
+    .map((name, index) => {
+      const originalIndex = rawLines.indexOf(name);
+      const next = rawLines[originalIndex + 1] || "";
+      return {
+        name,
+        description: isLikelyDescriptionLine(next) && !ignoredLine.test(next) ? next : undefined,
+      };
+    })
     .slice(0, 12);
+
+  if (isServiceSelectionPrompt) return numberedOptions;
+
+  const inferredOptions = rawLines
+    .map<ServiceOption | null>((line, index) => {
+      const next = rawLines[index + 1] || "";
+      const hasDescriptionAfter = isLikelyDescriptionLine(next);
+      const looksLikeHeading = isLikelyServiceHeading(line);
+      const isIntro = ignoredLine.test(line) || /hola|puedo orientarte|elige una opcion/i.test(line);
+      const isContinuation = /gratuito|incluye|atencion|talleres|proceso|registro|puedes escribir/i.test(line);
+      if (!looksLikeHeading || !hasDescriptionAfter || isIntro || isContinuation) return null;
+      return { name: line, description: next };
+    })
+    .filter((option): option is ServiceOption => option !== null)
+    .slice(0, 12);
+
+  return inferredOptions;
+}
+
+export function extractServiceOptionsFromList(content: string): string[] {
+  return extractServiceOptionsWithDescriptionsFromList(content).map((option) => option.name);
 }
 
 export function extractServiceNameFromSectionMenu(content: string): string | null {
@@ -160,13 +272,55 @@ export function extractServiceNameFromSectionMenu(content: string): string | nul
   return firstLine || null;
 }
 
-export function looksLikeDirectServiceName(content: string): boolean {
+export function normalizeDirectServiceName(content: string): string {
+  return content
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/^(sobre|acerca de|informacion sobre|informaci[oó]n sobre)\s+/i, "")
+    .trim();
+}
+
+export function getSectionLabelByNumber(sectionNumber: number): string | null {
+  return SECTION_BY_NUMBER[sectionNumber] || null;
+}
+
+export function getRequestedSectionLabel(
+  content: string,
+  messages: ConversationMessage[] = [],
+): string | null {
   const normalized = content.trim().replace(/\s+/g, " ");
+  const selectedNumber = Number.parseInt(normalized, 10);
+
+  if (Number.isInteger(selectedNumber)) {
+    const previousAssistant = [...messages]
+      .slice(0, -1)
+      .reverse()
+      .find((message) => message.role === "assistant");
+
+    if (previousAssistant && extractServiceNameFromSectionMenu(previousAssistant.content)) {
+      return getSectionLabelByNumber(selectedNumber);
+    }
+  }
+
+  if (/\brequisitos?\b/i.test(normalized)) return "Requisitos";
+  if (/\b(costos?|cuanto|cu[aá]nto)\b/i.test(normalized)) return "Costos";
+  if (/\b(horario|vigencia|convocatoria)\b/i.test(normalized)) return "Horario, vigencia o convocatoria";
+  if (/\b(lugar|donde queda|d[oó]nde queda|direccion|direcci[oó]n|telefono|tel[eé]fono|contacto)\b/i.test(normalized)) return "Lugar y contacto";
+  if (/\ben que consiste\b/i.test(normalized)) return "En que consiste";
+  if (/\ba quien va dirigido\b/i.test(normalized)) return "A quien va dirigido";
+  if (/\bnota importante\b/i.test(normalized)) return "Nota importante";
+  if (COMPLETE_RECORD_KEYWORDS.test(normalized)) return "Ficha completa";
+
+  return null;
+}
+
+export function looksLikeDirectServiceName(content: string): boolean {
+  const normalized = normalizeDirectServiceName(content);
   if (!normalized) return false;
 
   const lower = normalized.toLowerCase();
   const wordCount = normalized.split(" ").length;
-  const asksForList = /\b(que|qu[eé]|cuales|cu[aá]les|listado|servicios|tramites|tr[aá]mites|apoyos|hay|tienen|ver)\b/i.test(lower);
+  const asksForList = /\b(que|qu[eé]|cuales|cu[aá]les|listado|tramites|tr[aá]mites|apoyos|hay|tienen|ver)\b/i.test(lower);
   const asksForDetail = SECTION_KEYWORDS.test(lower) || COMPLETE_RECORD_KEYWORDS.test(lower);
 
   return wordCount <= 8 && !asksForList && !asksForDetail && DIRECT_SERVICE_MARKERS.test(lower);
@@ -197,6 +351,10 @@ export function classifyConversationIntent(
       .slice(0, -1)
       .reverse()
       .find((message) => message.role === "assistant");
+
+    if (previousAssistant && isInitialWelcomeMenu(previousAssistant.content)) {
+      return "general_help";
+    }
 
     if (previousAssistant && extractServiceOptionsFromList(previousAssistant.content).length > 0) {
       return "service_selection";
@@ -234,8 +392,9 @@ export function getDeterministicWidgetResponse(messages: ConversationMessage[]):
 
   const currentContent = lastMessage.content.trim();
   const currentIntent = classifyConversationIntent(currentContent, messages);
+  const selectedNumber = Number.parseInt(currentContent, 10);
 
-  if (currentIntent === "ambiguous" || currentIntent === "general_help") {
+  if (currentIntent === "ambiguous" || (currentIntent === "general_help" && !Number.isInteger(selectedNumber))) {
     return buildAmbiguousHelpResponse();
   }
   if (currentIntent === "complementary") {
@@ -251,10 +410,9 @@ export function getDeterministicWidgetResponse(messages: ConversationMessage[]):
     return buildHumanHandoffResponse();
   }
 
-  const selectedNumber = Number.parseInt(currentContent, 10);
   if (!Number.isInteger(selectedNumber) || selectedNumber < 1) {
     if (looksLikeDirectServiceName(currentContent)) {
-      return buildServiceSectionMenu(currentContent);
+      return buildServiceSectionMenu(normalizeDirectServiceName(currentContent));
     }
     return null;
   }
@@ -266,11 +424,15 @@ export function getDeterministicWidgetResponse(messages: ConversationMessage[]):
 
   if (!previousAssistant) return null;
 
-  const serviceOptions = extractServiceOptionsFromList(previousAssistant.content);
+  if (isInitialWelcomeMenu(previousAssistant.content)) {
+    return buildInitialMenuOptionResponse(selectedNumber);
+  }
+
+  const serviceOptions = extractServiceOptionsWithDescriptionsFromList(previousAssistant.content);
   const selectedService = serviceOptions[selectedNumber - 1];
   if (!selectedService) return null;
 
-  return buildServiceSectionMenu(selectedService);
+  return buildServiceSectionMenu(selectedService.name, selectedService.description);
 }
 
 export function buildRuntimeSystemPrompt(systemPrompt: string | null | undefined, knowledgeContext: string): string {
@@ -281,7 +443,7 @@ export function buildRuntimeSystemPrompt(systemPrompt: string | null | undefined
 === POLITICA RUNTIME DE CONVERSACION ===
 Estas reglas son obligatorias y tienen prioridad sobre los fragmentos RAG:
 1. Si la intencion es LISTADO, responde solo nombres de servicios y pregunta cual quiere consultar.
-2. Si la intencion es SELECCION DE SERVICIO, responde solo el menu de apartados.
+2. Si la intencion es SELECCION DE SERVICIO o SERVICIO DIRECTO, responde con: nombre del servicio sin corchetes, una descripcion breve tomada de los fragmentos, y despues el menu de apartados.
 3. Si la intencion es APARTADO, responde solo ese apartado.
 4. Si la intencion es FICHA COMPLETA, entrega todos los apartados.
 5. Nunca conviertas una seleccion de servicio en ficha completa.
@@ -291,6 +453,25 @@ Estas reglas son obligatorias y tienen prioridad sobre los fragmentos RAG:
 9. Si el usuario describe una emergencia o riesgo inmediato, indica llamar al 911 y aclara que no sustituyes atencion de emergencia.
 10. Si el usuario pide hablar con una persona, ayuda a ubicar el tema o servicio y ofrece pedir lugar/contacto si esta en la base de conocimiento.
 11. Para informacion complementaria relacionada con DIF, responde en general solo si no inventas datos; despues pide que el usuario elija tramite, servicio, programa, taller o apoyo.
+12. Cuando el usuario conteste con un numero desde el menu de apartados: 1=En que consiste, 2=A quien va dirigido, 3=Requisitos, 4=Costos, 5=Horario/vigencia/convocatoria, 6=Lugar y contacto, 7=Nota importante, 8=Ficha completa.
+13. Formato obligatorio para servicio seleccionado:
+[Nombre del servicio]
+
+En breve: [una sola frase breve sobre de que trata el servicio, usando solo los fragmentos disponibles. Si no hay descripcion, escribe: Puedo mostrarte la informacion por partes para que sea mas facil revisarla.]
+
+Que informacion quieres conocer?
+
+1. En que consiste
+2. A quien va dirigido
+3. Requisitos
+4. Costos
+5. Horario, vigencia o convocatoria
+6. Lugar y contacto
+7. Nota importante
+8. Ficha completa
+
+Puedes escribir el numero o el apartado. Tambien puedes pedir "ficha completa".
+14. Nunca pongas el nombre del servicio entre corchetes en la respuesta final.
 === FIN POLITICA RUNTIME ===
 
 ${knowledgeContext}`;

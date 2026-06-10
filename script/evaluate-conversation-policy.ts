@@ -3,6 +3,8 @@ import {
   classifyConversationIntent,
   deriveConversationState,
   extractServiceOptionsFromList,
+  extractServiceOptionsWithDescriptionsFromList,
+  getRequestedSectionLabel,
   buildAmbiguousHelpResponse,
   getDeterministicWidgetResponse,
   type ConversationIntent,
@@ -56,8 +58,40 @@ Que informacion quieres conocer?
 
 Puedes escribir el numero o el apartado.`;
 
+const initialWelcome = `Hola, soy SofIA, asistente virtual del DIF Zapopan.
+
+Puedo orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles.
+
+Elige una opcion o escribe tu pregunta:
+
+1. Buscar un tramite o servicio
+2. No se que necesito
+3. Ver por grupo de atencion
+4. Ver programas o talleres`;
+
+const cemamDescriptiveList = `Servicios en el CEMAM
+
+Servicios Basicos y Asistenciales
+
+Atencion en estetica, comedor, transporte y biblioteca.
+Gratuito para adultos mayores afiliados al CEMAM.
+Desarrollo de Habilidades Productivas y Emprendurismo
+
+Talleres de tejido, bordado, pintura, bisuteria, reciclado, etc.
+Gratuito, con aportacion voluntaria en algunos casos.
+Afiliacion al INAPAM
+
+Proceso para acceder a descuentos en servicios publicos.
+Gratuito.
+Reporte de Personas Mayores en Situacion de Vulnerabilidad
+
+Registro de adultos mayores en situaciones de omision de cuidado.
+Gratuito.`;
+
 const intentCases: IntentCase[] = [
   { name: "listado CEMAM", input: "que tramites y/o servicios hay en el CEMAM", expected: "list" },
+  { name: "boton rapido CEMAM", input: "Servicios en el CEMAM", expected: "list" },
+  { name: "servicio directo servicios basicos", input: "Servicios Básicos y Asistenciales", expected: "direct_service" },
   { name: "listado ayuda alimentaria", input: "Qué servicios hay sobre ayuda alimentaria", expected: "list" },
   { name: "listado programas", input: "ver programas", expected: "list" },
   { name: "ayuda general", input: "No sé qué necesito", expected: "general_help" },
@@ -86,12 +120,30 @@ const intentCases: IntentCase[] = [
     ],
   },
   {
+    name: "seleccion numerica desde listado descriptivo",
+    input: "1",
+    expected: "service_selection",
+    messages: [
+      { role: "assistant", content: cemamDescriptiveList },
+      { role: "user", content: "1" },
+    ],
+  },
+  {
     name: "numero desde menu es solicitud de apartado",
     input: "4",
     expected: "section_request",
     messages: [
       { role: "assistant", content: sectionMenu },
       { role: "user", content: "4" },
+    ],
+  },
+  {
+    name: "numero desde saludo inicial es opcion inicial",
+    input: "3",
+    expected: "general_help",
+    messages: [
+      { role: "assistant", content: initialWelcome },
+      { role: "user", content: "3" },
     ],
   },
 ];
@@ -103,19 +155,28 @@ const responseCases: ResponseCase[] = [
       { role: "assistant", content: cemamList },
       { role: "user", content: "5" },
     ],
-    includes: ["Afiliacion al INAPAM", "Que informacion quieres conocer?", "8. Ficha completa"],
+    includes: ["Afiliacion al INAPAM", "Te acompano con este servicio", "Que informacion quieres conocer?", "8. Ficha completa"],
     excludes: ["Proceso para inscribir", "Documentacion requerida", "Servicio gratuito"],
+  },
+  {
+    name: "seleccion numerica desde listado descriptivo devuelve menu",
+    messages: [
+      { role: "assistant", content: cemamDescriptiveList },
+      { role: "user", content: "1" },
+    ],
+    includes: ["Servicios Basicos y Asistenciales", "En breve: Atencion en estetica, comedor, transporte y biblioteca.", "Que informacion quieres conocer?", "8. Ficha completa"],
+    excludes: ["Gratuito"],
   },
   {
     name: "servicio directo devuelve menu",
     messages: [{ role: "user", content: "Afiliación al INAPAM" }],
-    includes: ["Afiliación al INAPAM", "Que informacion quieres conocer?", "3. Requisitos"],
+    includes: ["Afiliación al INAPAM", "Te acompano con este servicio", "Que informacion quieres conocer?", "3. Requisitos"],
     excludes: ["Proceso para inscribir", "Adultos mayores", "Servicio gratuito"],
   },
   {
     name: "directo prematrimonial devuelve menu",
     messages: [{ role: "user", content: "platicas prematrimoniales" }],
-    includes: ["platicas prematrimoniales", "Que informacion quieres conocer?", "4. Costos"],
+    includes: ["platicas prematrimoniales", "Te acompano con este servicio", "Que informacion quieres conocer?", "4. Costos"],
     excludes: ["Cuota aproximada", "actas de nacimiento", "comprobante de transferencia"],
   },
   {
@@ -126,6 +187,15 @@ const responseCases: ResponseCase[] = [
     ],
     includes: [],
     excludes: [],
+  },
+  {
+    name: "numero 3 desde saludo inicial devuelve grupos",
+    messages: [
+      { role: "assistant", content: initialWelcome },
+      { role: "user", content: "3" },
+    ],
+    includes: ["grupo de atencion", "Personas mayores", "Personas con discapacidad"],
+    excludes: ["Requisitos", "Talleres deportivos"],
   },
   {
     name: "listado amplio no se intercepta como servicio directo",
@@ -238,13 +308,28 @@ try {
   const options = extractServiceOptionsFromList(cemamList);
   assert(options.length === 5, `extractServiceOptionsFromList: esperado 5, recibido ${options.length}`);
   assert(options[4] === "Afiliacion al INAPAM", "extractServiceOptionsFromList: opcion 5 incorrecta");
+  const descriptiveOptions = extractServiceOptionsFromList(cemamDescriptiveList);
+  assert(descriptiveOptions.length === 4, `extractServiceOptionsFromList descriptivo: esperado 4, recibido ${descriptiveOptions.length}`);
+  assert(descriptiveOptions[0] === "Servicios Basicos y Asistenciales", "extractServiceOptionsFromList descriptivo: opcion 1 incorrecta");
+  const descriptiveOptionsWithDescriptions = extractServiceOptionsWithDescriptionsFromList(cemamDescriptiveList);
+  assert(
+    descriptiveOptionsWithDescriptions[0]?.description === "Atencion en estetica, comedor, transporte y biblioteca.",
+    "extractServiceOptionsWithDescriptionsFromList: descripcion de opcion 1 incorrecta",
+  );
+  assert(
+    getRequestedSectionLabel("1", [
+      { role: "assistant", content: sectionMenu },
+      { role: "user", content: "1" },
+    ]) === "En que consiste",
+    "getRequestedSectionLabel: numero 1 no mapea a En que consiste",
+  );
 
   const runtimePrompt = buildRuntimeSystemPrompt("Prompt base", "Contexto RAG");
   assert(runtimePrompt.includes("POLITICA RUNTIME DE CONVERSACION"), "runtime prompt sin politica");
   assert(runtimePrompt.includes("Contexto RAG"), "runtime prompt sin contexto RAG");
   assert(runtimePrompt.includes("consulta es ambigua"), "runtime prompt sin politica UX ambigua");
   assert(buildAmbiguousHelpResponse().includes("Buscar un tramite o servicio"), "respuesta ambigua sin opciones");
-  passed += 3;
+  passed += 7;
 } catch (error) {
   failed += 1;
   console.error(`FAIL support - ${(error as Error).message}`);

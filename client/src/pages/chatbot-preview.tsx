@@ -18,13 +18,26 @@ interface Message {
   content: string;
 }
 
+function createSessionId(): string {
+  const cryptoApi = globalThis.crypto as Crypto | undefined;
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
+    return cryptoApi.randomUUID();
+  }
+
+  return "xxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.random() * 16 | 0;
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
 const DEFAULT_WELCOME_MESSAGE = `Hola, soy SofIA, asistente virtual del DIF Zapopan.
 
-Puedo orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles.
+Estoy aqui para orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles.
 
-Puedes escribirme el tramite o servicio que buscas, pedir un listado por tema o grupo de atencion, o seleccionar un apartado como requisitos, costos, horarios, lugar y contacto.
+Cuentame que necesitas y te acompano paso a paso. Puedo ayudarte a encontrar el servicio correcto y despues mostrarte solo el apartado que te interesa: requisitos, costos, horarios, lugar y contacto, o ficha completa.
 
-Elige una opcion o escribe tu pregunta:
+Para empezar, elige una opcion o escribe tu pregunta:
 
 1. Buscar un tramite o servicio
 2. No se que necesito
@@ -44,6 +57,7 @@ export default function ChatbotPreview() {
   const [input, setInput] = useState("");
   const [isLoadingChat, setIsLoadingChat] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sessionIdRef = useRef(createSessionId());
 
   useEffect(() => {
     if (chatbot) {
@@ -77,18 +91,12 @@ export default function ChatbotPreview() {
     setIsLoadingChat(true);
 
     try {
-      let sessionId = localStorage.getItem(`chatbot-${chatbot.id}-session`);
-      if (!sessionId) {
-        sessionId = crypto.randomUUID();
-        localStorage.setItem(`chatbot-${chatbot.id}-session`, sessionId);
-      }
-
       const response = await fetch(`/api/widget/${chatbot.id}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage.content,
-          sessionId,
+          sessionId: sessionIdRef.current,
         }),
       });
 
