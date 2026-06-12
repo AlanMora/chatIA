@@ -260,8 +260,15 @@ function assert(condition: boolean, message: string) {
 }
 
 function sourceMatches(sources: string[], expected: string[]) {
-  const normalizedSources = sources.map((source) => source.toLowerCase());
-  return expected.some((needle) => normalizedSources.some((source) => source.includes(needle.toLowerCase())));
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const normalizedSources = sources.map(normalize);
+  return expected.some((needle) => normalizedSources.some((source) => source.includes(normalize(needle))));
 }
 
 async function assertRagResult(name: string, messages: ConversationMessage[], minChunks: number, sourceIncludes?: string[]) {

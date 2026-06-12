@@ -9,13 +9,21 @@ type MessageLike = {
   content: string;
 };
 
-type RetrievedChunk = KnowledgeBaseChunk & { sourceTitle: string };
+type RetrievedChunk = KnowledgeBaseChunk & {
+  sourceTitle: string;
+  sourceUrl: string | null;
+  skill: string | null;
+  tipoDocumento: string | null;
+  categoria: string | null;
+  metadata: Record<string, unknown> | null;
+};
 
 export type KnowledgeContextResult = {
   context: string;
   strategy: "empty" | "full" | "vector";
   chunksFound?: number;
   sources?: string[];
+  sourceUrls?: string[];
 };
 
 const CHUNK_SIZE = 1000;
@@ -36,26 +44,56 @@ function getRetrievalState(messages: MessageLike[]): {
   query: string | null;
   activeService: string | null;
   shouldPreferActiveService: boolean;
+  preferredSkills: string[];
 } {
   const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content;
   if (!lastUserMessage) {
-    return { query: null, activeService: null, shouldPreferActiveService: false };
+    return { query: null, activeService: null, shouldPreferActiveService: false, preferredSkills: [] };
   }
 
   const activeService = getActiveServiceName(messages);
   const intent = classifyConversationIntent(lastUserMessage, messages);
   const requestedSection = getRequestedSectionLabel(lastUserMessage, messages);
   const shouldPreferActiveService = Boolean(activeService && (intent === "section_request" || intent === "complete_record"));
+  const preferredSkills = getPreferredSkills(lastUserMessage);
 
   if (activeService && shouldPreferActiveService) {
     return {
       query: `${activeService} ${requestedSection || lastUserMessage}`,
       activeService,
       shouldPreferActiveService,
+      preferredSkills,
     };
   }
 
-  return { query: lastUserMessage, activeService, shouldPreferActiveService };
+  return { query: lastUserMessage, activeService, shouldPreferActiveService, preferredSkills };
+}
+
+function getPreferredSkills(query: string): string[] {
+  const normalized = normalizeForMatch(query);
+  const skills: string[] = [];
+
+  if (/\b(violencia|riesgo|emergencia|maltrato|abandono|crisis|victima|victima|abuso|golpea|golpes)\b/.test(normalized)) {
+    skills.push("protocolos_orientacion_riesgo");
+  }
+
+  if (/\b(quien eres|quien es sofia|que puedes hacer|como funcionas|dif zapopan|contacto general|sede principal|correo)\b/.test(normalized)) {
+    skills.push("institucional_sofia");
+  }
+
+  if (/\b(direccion|telefono|horario|mapa|ubicacion|ubicado|donde esta|donde queda|centro|nido|habiliteca|cemam|caic|ludoteca|cercana|cercano)\b/.test(normalized)) {
+    skills.push("ubicaciones_institucionales");
+  }
+
+  if (/\b(tramite|servicio|requisito|documentacion|documentos|costo|cuanto cuesta|constancia|solicitud|registro|cita)\b/.test(normalized)) {
+    skills.push("tramites_servicios_dif_zapopan");
+  }
+
+  if (/\b(programa|apoyo|beneficio|poblacion|personas mayores|adultos mayores|ninas|ninos|adolescentes|alimentario|taller)\b/.test(normalized)) {
+    skills.push("programas_servicios_dif_zapopan");
+  }
+
+  return Array.from(new Set(skills));
 }
 
 function filterChunksByActiveService(chunks: RetrievedChunk[], activeService: string | null): RetrievedChunk[] {
@@ -74,6 +112,25 @@ function filterChunksByActiveService(chunks: RetrievedChunk[], activeService: st
   });
 
   return matched.length > 0 ? matched : chunks;
+}
+
+function rankChunksByPreferredSkills(chunks: RetrievedChunk[], preferredSkills: string[]): RetrievedChunk[] {
+  if (preferredSkills.length === 0) return chunks;
+
+  return [...chunks].sort((a, b) => {
+    const aIndex = a.skill ? preferredSkills.indexOf(a.skill) : -1;
+    const bIndex = b.skill ? preferredSkills.indexOf(b.skill) : -1;
+    const aScore = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+    const bScore = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+    return aScore - bScore;
+  });
+}
+
+function sourceUrlFromChunk(chunk: RetrievedChunk): string | null {
+  const metadataUrl = chunk.metadata?.source_url;
+  return typeof metadataUrl === "string" && metadataUrl.trim()
+    ? metadataUrl
+    : chunk.sourceUrl;
 }
 
 function normalizeEmbedding(values: number[]): number[] {
@@ -370,20 +427,31 @@ export async function buildKnowledgeContext(
     const queryEmbedding = await generateEmbedding(retrievalQuery, chatbot);
     const chunkLimit = retrievalState.shouldPreferActiveService ? 20 : 5;
     const retrievedChunks = await storage.searchSimilarChunks(chatbotId, queryEmbedding, chunkLimit);
-    const similarChunks = filterChunksByActiveService(
+    const activeServiceChunks = filterChunksByActiveService(
       retrievedChunks,
       retrievalState.shouldPreferActiveService ? retrievalState.activeService : null,
-    ).slice(0, 5);
+    );
+    const similarChunks = rankChunksByPreferredSkills(activeServiceChunks, retrievalState.preferredSkills).slice(0, 5);
 
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
     }
 
     const body = similarChunks
-      .map(chunk => `[DOCUMENTO: ${chunk.sourceTitle}]: ${chunk.content}`)
+      .map(chunk => {
+        const sourceUrl = sourceUrlFromChunk(chunk);
+        const metadata = [
+          chunk.skill ? `skill=${chunk.skill}` : null,
+          chunk.tipoDocumento ? `tipo_documento=${chunk.tipoDocumento}` : null,
+          chunk.categoria ? `categoria=${chunk.categoria}` : null,
+          sourceUrl ? `source_url=${sourceUrl}` : null,
+        ].filter(Boolean).join("; ");
+        return `[DOCUMENTO: ${chunk.sourceTitle}${metadata ? ` | ${metadata}` : ""}]: ${chunk.content}`;
+      })
       .join("\n\n---\n\n");
 
     const sources = Array.from(new Set(similarChunks.map(c => c.sourceTitle)));
+    const sourceUrls = Array.from(new Set(similarChunks.map(sourceUrlFromChunk).filter((url): url is string => Boolean(url))));
     console.log(`[RAG] Found information in: ${sources.join(", ")}`);
 
     const context = `
@@ -419,6 +487,8 @@ Que informacion quieres conocer?
 14. Si hay servicio activo y el usuario pide costo, requisitos, documentacion, ubicacion, horario, telefono, contacto o ficha completa, usa solamente los fragmentos del servicio activo.
 15. No sugieras documentacion si no aparece explicitamente en los fragmentos.
 16. Si el usuario pregunta ubicacion o contacto, prioriza direccion, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
+17. Si aparece source_url en el fragmento, puedes mencionar "Fuente: [url]" al final de forma breve.
+18. No mezcles tramites/servicios con programas salvo que el usuario lo pida y ambos fragmentos indiquen relacion clara.
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}
@@ -429,7 +499,8 @@ ${body}
       context, 
       strategy: "vector", 
       chunksFound: similarChunks.length,
-      sources
+      sources,
+      sourceUrls,
     };
   } catch (error) {
     console.error("[RAG] Error in buildKnowledgeContext:", error);

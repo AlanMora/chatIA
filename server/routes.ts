@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertChatbotSchema, insertKnowledgeBaseItemSchema, type Chatbot } from "@shared/schema";
+import { insertChatbotSchema, insertKnowledgeBaseItemSchema, type Chatbot, type InsertKnowledgeBaseItem } from "@shared/schema";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import multer from "multer";
@@ -858,10 +858,10 @@ export async function registerRoutes(
   }
 
   // Helper to parse a JSONL buffer into knowledge base items
-  function parseJsonlContent(buffer: Buffer, filename: string): { title: string; content: string }[] {
+  function parseJsonlContent(buffer: Buffer, filename: string): Omit<InsertKnowledgeBaseItem, "chatbotId">[] {
     const text = buffer.toString('utf-8');
     const lines = text.split('\n').filter(line => line.trim());
-    const items: { title: string; content: string }[] = [];
+    const items: Omit<InsertKnowledgeBaseItem, "chatbotId">[] = [];
     const titleFields = ['title', 'question', 'input', 'prompt', 'name', 'subject'];
     const contentFields = ['content', 'text', 'answer', 'response', 'description', 'body', 'message', 'output'];
 
@@ -871,11 +871,18 @@ export async function registerRoutes(
         let title = '';
         let content = '';
 
-        for (const field of titleFields) {
-          if (obj[field] && typeof obj[field] === 'string') { title = obj[field]; break; }
+        title = typeof obj.titulo === "string" ? obj.titulo : "";
+        content = typeof obj.contenido === "string" ? obj.contenido : (typeof obj.pageContent === "string" ? obj.pageContent : "");
+
+        if (!title) {
+          for (const field of titleFields) {
+            if (obj[field] && typeof obj[field] === 'string') { title = obj[field]; break; }
+          }
         }
-        for (const field of contentFields) {
-          if (obj[field] && typeof obj[field] === 'string') { content = obj[field]; break; }
+        if (!content) {
+          for (const field of contentFields) {
+            if (obj[field] && typeof obj[field] === 'string') { content = obj[field]; break; }
+          }
         }
 
         // Fallback: concatenate all string values
@@ -890,7 +897,35 @@ export async function registerRoutes(
         }
 
         if (content.trim()) {
-          items.push({ title: title || `${filename} - ${i + 1}`, content: content.trim() });
+          const sourceUrl = typeof obj.source_url === "string"
+            ? obj.source_url
+            : (typeof obj.metadata?.source_url === "string" ? obj.metadata.source_url : filename);
+          items.push({
+            externalId: typeof obj.id === "string" ? obj.id : undefined,
+            skill: typeof obj.skill === "string" ? obj.skill : undefined,
+            tipoDocumento: typeof obj.tipo_documento === "string" ? obj.tipo_documento : undefined,
+            categoria: typeof obj.categoria === "string" ? obj.categoria : undefined,
+            audiencia: Array.isArray(obj.audiencia) ? obj.audiencia.filter((item: unknown) => typeof item === "string") : [],
+            title: title || `${filename} - ${i + 1}`,
+            content: [
+              typeof obj.skill === "string" ? `Skill: ${obj.skill}` : null,
+              typeof obj.tipo_documento === "string" ? `Tipo de documento: ${obj.tipo_documento}` : null,
+              typeof obj.categoria === "string" ? `Categoria: ${obj.categoria}` : null,
+              content.trim(),
+              obj.apartados ? `Apartados estructurados: ${JSON.stringify(obj.apartados)}` : null,
+              obj.metadata ? `Metadata: ${JSON.stringify(obj.metadata)}` : null,
+            ].filter(Boolean).join("\n"),
+            source: typeof obj.source === "string" ? obj.source : undefined,
+            sourceType: "jsonl",
+            sourceUrl,
+            metadata: {
+              ...(obj.metadata && typeof obj.metadata === "object" ? obj.metadata : {}),
+              descripcion_breve: typeof obj.descripcion_breve === "string" ? obj.descripcion_breve : null,
+              apartados: obj.apartados || null,
+              jsonl_id: typeof obj.id === "string" ? obj.id : null,
+            },
+            mimeType: "application/jsonl",
+          });
         }
       } catch {
         // Skip invalid JSON lines
@@ -930,10 +965,9 @@ export async function registerRoutes(
         for (const parsed of parsedItems) {
           const item = await storage.createKnowledgeBaseItem({
             chatbotId,
-            title: parsed.title,
-            content: parsed.content,
-            sourceType: "file",
-            sourceUrl: file.originalname,
+            ...parsed,
+            sourceType: parsed.sourceType || "jsonl",
+            sourceUrl: parsed.sourceUrl || file.originalname,
           });
           await processKnowledgeItem(item);
           created.push(item);
@@ -1012,10 +1046,9 @@ export async function registerRoutes(
             for (const parsed of parsedItems) {
               const item = await storage.createKnowledgeBaseItem({
                 chatbotId,
-                title: parsed.title,
-                content: parsed.content,
-                sourceType: "file",
-                sourceUrl: file.originalname,
+                ...parsed,
+                sourceType: parsed.sourceType || "jsonl",
+                sourceUrl: parsed.sourceUrl || file.originalname,
               });
               await processKnowledgeItem(item);
             }

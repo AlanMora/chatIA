@@ -32,6 +32,56 @@ export const DEFAULT_AGENT_SKILLS: InsertAgentSkill[] = [
     isSystem: true,
     isActive: true,
   },
+  {
+    id: "institucional_sofia",
+    name: "Capa institucional SofIA",
+    description: "Orienta sobre identidad de SofIA, DIF Zapopan, contacto general e informacion institucional.",
+    category: "conocimiento",
+    instructions:
+      "Usa esta capa para preguntas sobre quien es SofIA, que puede hacer, que es DIF Zapopan, contacto general o datos institucionales.",
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: "protocolos_orientacion_riesgo",
+    name: "Protocolos de orientacion y riesgo",
+    description: "Prioriza respuestas ante violencia, maltrato, abandono, crisis, victimas o emergencias.",
+    category: "seguridad",
+    instructions:
+      "Si hay riesgo inmediato indica llamar al 911. Despues orienta con servicios de reporte o atencion disponibles en la base de conocimiento.",
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: "programas_servicios_dif_zapopan",
+    name: "Programas y servicios DIF Zapopan",
+    description: "Orienta sobre programas, apoyos, poblacion objetivo y servicios complementarios.",
+    category: "conocimiento",
+    instructions:
+      "No mezcles programas con tramites salvo que la base indique relacion clara. Si falta un dato, di que no esta especificado.",
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: "ubicaciones_institucionales",
+    name: "Ubicaciones institucionales",
+    description: "Orienta sobre sedes, centros, direcciones, telefonos, horarios y mapas.",
+    category: "conocimiento",
+    instructions:
+      "Usa esta capa para preguntas de direccion, telefono, horario, mapa, centro, NIDO, Habiliteca, CEMAM, CAIC o ubicacion cercana.",
+    isSystem: true,
+    isActive: true,
+  },
+  {
+    id: "tramites_servicios_dif_zapopan",
+    name: "Tramites y servicios DIF Zapopan",
+    description: "Orienta sobre tramites y servicios estructurados por apartados.",
+    category: "conocimiento",
+    instructions:
+      "Usa esta capa para requisitos, documentacion, costos, horario, lugar y contacto de tramites o servicios. No inventes datos faltantes.",
+    isSystem: true,
+    isActive: true,
+  },
 ];
 
 export const DEFAULT_AGENT_TOOLS: InsertAgentTool[] = [

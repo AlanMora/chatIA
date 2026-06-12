@@ -1,0 +1,38 @@
+{
+  "pack": "SOFIA_KB_COMPLETO_DEPURADO_PACK",
+  "generated_at": "2026-06-12",
+  "recommended_master": "jsonl/integrar/99_sofia_kb_master_completo_depurado.jsonl",
+  "total_records": 92,
+  "layers": [
+    {
+      "skill": "institucional_sofia",
+      "file": "jsonl/integrar/01_institucional_base.canonical.jsonl",
+      "records": 7
+    },
+    {
+      "skill": "protocolos_orientacion_riesgo",
+      "file": "jsonl/integrar/02_protocolos_orientacion_riesgo.canonical.jsonl",
+      "records": 4
+    },
+    {
+      "skill": "programas_servicios_dif_zapopan",
+      "file": "jsonl/integrar/03_programas_servicios_dif_zapopan.seed.canonical.jsonl",
+      "records": 38
+    },
+    {
+      "skill": "ubicaciones_institucionales",
+      "file": "jsonl/integrar/04_centros_dif_zapopan_activos.canonical.jsonl",
+      "records": 43
+    }
+  ],
+  "do_not_integrate_together": [
+    "jsonl/referencia_no_integrar/sofia_capa_institucional_dif_zapopan(1).jsonl",
+    "jsonl/referencia_no_integrar/sofia_ubicaciones_institucionales (1).jsonl",
+    "jsonl/referencia_no_integrar/sofia_ubicaciones_institucionales_con_maps_url.jsonl"
+  ],
+  "dedupe_policy": {
+    "exact_duplicates": "eliminados por separación de capas y no uso del archivo compuesto",
+    "programs_same_name": "conservar cuando cambia audiencia/ruta",
+    "legacy_locations": "reemplazadas por API de centros activos con lat/lng"
+  }
+}

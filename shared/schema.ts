@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, integer, timestamp, jsonb, boolean, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, integer, timestamp, jsonb, boolean, customType, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -135,14 +135,25 @@ export type ChatbotModelSettings = typeof chatbotModelSettings.$inferSelect;
 export const knowledgeBaseItems = pgTable("knowledge_base_items", {
   id: serial("id").primaryKey(),
   chatbotId: integer("chatbot_id").references(() => chatbots.id, { onDelete: "cascade" }),
+  externalId: text("external_id"),
+  skill: text("skill"),
+  tipoDocumento: text("tipo_documento"),
+  categoria: text("categoria"),
+  audiencia: jsonb("audiencia").$type<string[]>(),
   title: text("title").notNull(),
   content: text("content").notNull(),
+  source: text("source"),
   sourceType: text("source_type").default("text"), // text, url, file
   sourceUrl: text("source_url"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   filePath: text("file_path"),
   mimeType: text("mime_type"),
   fileSize: integer("file_size"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => {
+  return {
+    chatbotExternalIdIdx: uniqueIndex("knowledge_base_items_chatbot_external_id_idx").on(table.chatbotId, table.externalId),
+  };
 });
 
 export const insertKnowledgeBaseItemSchema = createInsertSchema(knowledgeBaseItems).omit({

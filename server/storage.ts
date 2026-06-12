@@ -91,16 +91,26 @@ export interface IStorage {
   deleteChatbot(id: number): Promise<void>;
 
   getKnowledgeBaseItem(id: number): Promise<KnowledgeBaseItem | undefined>;
+  getKnowledgeBaseItemByExternalId(chatbotId: number, externalId: string): Promise<KnowledgeBaseItem | undefined>;
   getKnowledgeBaseItemsByChatbot(chatbotId: number): Promise<KnowledgeBaseItem[]>;
   createKnowledgeBaseItem(item: InsertKnowledgeBaseItem): Promise<KnowledgeBaseItem>;
+  updateKnowledgeBaseItem(id: number, item: Partial<InsertKnowledgeBaseItem>): Promise<KnowledgeBaseItem | undefined>;
   deleteKnowledgeBaseItem(id: number): Promise<void>;
   deleteKnowledgeBaseItems(ids: number[]): Promise<void>;
+  deleteKnowledgeBaseItemsByChatbot(chatbotId: number): Promise<void>;
 
   // Knowledge Base Chunks (RAG)
   createKnowledgeBaseChunk(chunk: InsertKnowledgeBaseChunk): Promise<KnowledgeBaseChunk>;
   createKnowledgeBaseChunks(chunks: InsertKnowledgeBaseChunk[]): Promise<KnowledgeBaseChunk[]>;
   deleteKnowledgeBaseChunksByItem(itemId: number): Promise<void>;
-  searchSimilarChunks(chatbotId: number, queryEmbedding: number[], limit?: number): Promise<KnowledgeBaseChunk[]>;
+  searchSimilarChunks(chatbotId: number, queryEmbedding: number[], limit?: number): Promise<(KnowledgeBaseChunk & {
+    sourceTitle: string;
+    sourceUrl: string | null;
+    skill: string | null;
+    tipoDocumento: string | null;
+    categoria: string | null;
+    metadata: Record<string, unknown> | null;
+  })[]>;
 
   getWidgetConversation(id: number): Promise<WidgetConversation | undefined>;
   getWidgetConversationBySession(chatbotId: number, sessionId: string): Promise<WidgetConversation | undefined>;
@@ -213,6 +223,14 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async getKnowledgeBaseItemByExternalId(chatbotId: number, externalId: string): Promise<KnowledgeBaseItem | undefined> {
+    const result = await db
+      .select()
+      .from(knowledgeBaseItems)
+      .where(and(eq(knowledgeBaseItems.chatbotId, chatbotId), eq(knowledgeBaseItems.externalId, externalId)));
+    return result[0];
+  }
+
   async getKnowledgeBaseItemsByChatbot(chatbotId: number): Promise<KnowledgeBaseItem[]> {
     return db
       .select()
@@ -226,6 +244,15 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async updateKnowledgeBaseItem(id: number, item: Partial<InsertKnowledgeBaseItem>): Promise<KnowledgeBaseItem | undefined> {
+    const result = await db
+      .update(knowledgeBaseItems)
+      .set(item)
+      .where(eq(knowledgeBaseItems.id, id))
+      .returning();
+    return result[0];
+  }
+
   async deleteKnowledgeBaseItem(id: number): Promise<void> {
     await db.delete(knowledgeBaseItems).where(eq(knowledgeBaseItems.id, id));
   }
@@ -233,6 +260,10 @@ export class DatabaseStorage implements IStorage {
   async deleteKnowledgeBaseItems(ids: number[]): Promise<void> {
     if (ids.length === 0) return;
     await db.delete(knowledgeBaseItems).where(inArray(knowledgeBaseItems.id, ids));
+  }
+
+  async deleteKnowledgeBaseItemsByChatbot(chatbotId: number): Promise<void> {
+    await db.delete(knowledgeBaseItems).where(eq(knowledgeBaseItems.chatbotId, chatbotId));
   }
 
   // Knowledge Base Chunks (RAG)
@@ -250,7 +281,14 @@ export class DatabaseStorage implements IStorage {
     await db.delete(knowledgeBaseChunks).where(eq(knowledgeBaseChunks.itemId, itemId));
   }
 
-  async searchSimilarChunks(chatbotId: number, queryEmbedding: number[], limit: number = 5): Promise<(KnowledgeBaseChunk & { sourceTitle: string })[]> {
+  async searchSimilarChunks(chatbotId: number, queryEmbedding: number[], limit: number = 5): Promise<(KnowledgeBaseChunk & {
+    sourceTitle: string;
+    sourceUrl: string | null;
+    skill: string | null;
+    tipoDocumento: string | null;
+    categoria: string | null;
+    metadata: Record<string, unknown> | null;
+  })[]> {
     const embeddingStr = `[${queryEmbedding.join(",")}]`;
     
     const result = await db.execute(sql`
@@ -262,7 +300,12 @@ export class DatabaseStorage implements IStorage {
         kbc.embedding::text, 
         kbc.index, 
         kbc.created_at as "createdAt",
-        kbi.title as "sourceTitle"
+        kbi.title as "sourceTitle",
+        kbi.source_url as "sourceUrl",
+        kbi.skill,
+        kbi.tipo_documento as "tipoDocumento",
+        kbi.categoria,
+        kbi.metadata
       FROM knowledge_base_chunks kbc
       JOIN knowledge_base_items kbi ON kbc.item_id = kbi.id
       WHERE kbc.chatbot_id = ${chatbotId}
@@ -279,6 +322,11 @@ export class DatabaseStorage implements IStorage {
       index: row.index as number,
       createdAt: new Date(row.createdAt as string),
       sourceTitle: row.sourceTitle as string,
+      sourceUrl: row.sourceUrl as string | null,
+      skill: row.skill as string | null,
+      tipoDocumento: row.tipoDocumento as string | null,
+      categoria: row.categoria as string | null,
+      metadata: row.metadata as Record<string, unknown> | null,
     }));
   }
 
