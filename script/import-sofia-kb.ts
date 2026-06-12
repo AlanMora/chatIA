@@ -160,13 +160,31 @@ function buildContent(record: SofiaJsonlRecord) {
   ].filter(Boolean).join("\n");
 }
 
+function normalizeGoogleMapsUrl(value: string): string {
+  return value.replace(
+    /https:\/\/www\.google\.com\/maps\/search\/\?api=1(?:&amp;|&)?query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/gi,
+    "https://www.google.com/maps/search/$1,$2",
+  );
+}
+
+function normalizeMapsInObject<T>(value: T): T {
+  if (typeof value === "string") return normalizeGoogleMapsUrl(value) as T;
+  if (Array.isArray(value)) return value.map((item) => normalizeMapsInObject(item)) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, normalizeMapsInObject(entry)]),
+    ) as T;
+  }
+  return value;
+}
+
 function toKnowledgeItem(chatbotId: number, record: SofiaJsonlRecord): InsertKnowledgeBaseItem {
-  const metadata = {
+  const metadata = normalizeMapsInObject({
     ...(record.metadata || {}),
     descripcion_breve: record.descripcion_breve || null,
     apartados: record.apartados || null,
     jsonl_id: record.id,
-  };
+  });
   const sourceUrl =
     record.source_url ||
     (typeof record.metadata?.source_url === "string" ? record.metadata.source_url : null);
@@ -179,10 +197,10 @@ function toKnowledgeItem(chatbotId: number, record: SofiaJsonlRecord): InsertKno
     categoria: record.categoria,
     audiencia: Array.isArray(record.audiencia) ? record.audiencia : [],
     title: record.titulo,
-    content: buildContent(record),
+    content: normalizeGoogleMapsUrl(buildContent(record)),
     source: record.source || null,
     sourceType: "jsonl",
-    sourceUrl,
+    sourceUrl: sourceUrl ? normalizeGoogleMapsUrl(sourceUrl) : sourceUrl,
     metadata,
     mimeType: "application/jsonl",
   };

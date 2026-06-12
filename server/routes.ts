@@ -136,6 +136,24 @@ function normalizeForCitizenQuery(value: string): string {
     .trim();
 }
 
+function normalizeGoogleMapsUrl(value: string): string {
+  return value.replace(
+    /https:\/\/www\.google\.com\/maps\/search\/\?api=1(?:&amp;|&)?query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/gi,
+    "https://www.google.com/maps/search/$1,$2",
+  );
+}
+
+function normalizeMapsInObject<T>(value: T): T {
+  if (typeof value === "string") return normalizeGoogleMapsUrl(value) as T;
+  if (Array.isArray(value)) return value.map((item) => normalizeMapsInObject(item)) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, normalizeMapsInObject(entry)]),
+    ) as T;
+  }
+  return value;
+}
+
 function getMetadataString(item: KnowledgeBaseItem, key: string): string | null {
   const value = item.metadata?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -180,9 +198,11 @@ En la información disponible tengo ${habilitecas.length} centros registrados co
   const lines = habilitecas.slice(0, 18).map((item, index) => {
     const direccion = getMetadataString(item, "direccion");
     const telefono = getMetadataString(item, "telefono");
+    const mapsUrl = getMetadataString(item, "google_maps_url") || item.sourceUrl;
     const details = [
       direccion ? `Dirección: ${direccion}` : null,
       telefono ? `Teléfono: ${telefono}` : null,
+      mapsUrl ? `Mapa: ${normalizeGoogleMapsUrl(mapsUrl)}` : null,
     ].filter(Boolean).join(". ");
     return `${index + 1}. ${item.title}${details ? `\n   ${details}.` : ""}`;
   });
@@ -967,6 +987,12 @@ export async function registerRoutes(
           const sourceUrl = typeof obj.source_url === "string"
             ? obj.source_url
             : (typeof obj.metadata?.source_url === "string" ? obj.metadata.source_url : filename);
+          const metadata = normalizeMapsInObject({
+            ...(obj.metadata && typeof obj.metadata === "object" ? obj.metadata : {}),
+            descripcion_breve: typeof obj.descripcion_breve === "string" ? obj.descripcion_breve : null,
+            apartados: obj.apartados || null,
+            jsonl_id: typeof obj.id === "string" ? obj.id : null,
+          });
           items.push({
             externalId: typeof obj.id === "string" ? obj.id : undefined,
             skill: typeof obj.skill === "string" ? obj.skill : undefined,
@@ -974,23 +1000,18 @@ export async function registerRoutes(
             categoria: typeof obj.categoria === "string" ? obj.categoria : undefined,
             audiencia: Array.isArray(obj.audiencia) ? obj.audiencia.filter((item: unknown) => typeof item === "string") : [],
             title: title || `${filename} - ${i + 1}`,
-            content: [
+            content: normalizeGoogleMapsUrl([
               typeof obj.skill === "string" ? `Skill: ${obj.skill}` : null,
               typeof obj.tipo_documento === "string" ? `Tipo de documento: ${obj.tipo_documento}` : null,
               typeof obj.categoria === "string" ? `Categoria: ${obj.categoria}` : null,
               content.trim(),
               obj.apartados ? `Apartados estructurados: ${JSON.stringify(obj.apartados)}` : null,
               obj.metadata ? `Metadata: ${JSON.stringify(obj.metadata)}` : null,
-            ].filter(Boolean).join("\n"),
+            ].filter(Boolean).join("\n")),
             source: typeof obj.source === "string" ? obj.source : undefined,
             sourceType: "jsonl",
-            sourceUrl,
-            metadata: {
-              ...(obj.metadata && typeof obj.metadata === "object" ? obj.metadata : {}),
-              descripcion_breve: typeof obj.descripcion_breve === "string" ? obj.descripcion_breve : null,
-              apartados: obj.apartados || null,
-              jsonl_id: typeof obj.id === "string" ? obj.id : null,
-            },
+            sourceUrl: sourceUrl ? normalizeGoogleMapsUrl(sourceUrl) : sourceUrl,
+            metadata,
             mimeType: "application/jsonl",
           });
         }

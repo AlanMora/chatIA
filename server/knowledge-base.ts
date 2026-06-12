@@ -45,6 +45,13 @@ function normalizeForMatch(value: string): string {
     .trim();
 }
 
+function normalizeGoogleMapsUrl(value: string): string {
+  return value.replace(
+    /https:\/\/www\.google\.com\/maps\/search\/\?api=1(?:&amp;|&)?query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/gi,
+    "https://www.google.com/maps/search/$1,$2",
+  );
+}
+
 function getRetrievalState(messages: MessageLike[]): {
   query: string | null;
   activeService: string | null;
@@ -160,9 +167,10 @@ function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): Ret
 
 function sourceUrlFromChunk(chunk: RetrievedChunk): string | null {
   const metadataUrl = chunk.metadata?.source_url;
-  return typeof metadataUrl === "string" && metadataUrl.trim()
+  const url = typeof metadataUrl === "string" && metadataUrl.trim()
     ? metadataUrl
     : chunk.sourceUrl;
+  return url ? normalizeGoogleMapsUrl(url) : null;
 }
 
 function normalizeEmbedding(values: number[]): number[] {
@@ -479,7 +487,7 @@ export async function buildKnowledgeContext(
           chunk.categoria ? `categoria=${chunk.categoria}` : null,
           sourceUrl ? `source_url=${sourceUrl}` : null,
         ].filter(Boolean).join("; ");
-        return `[DOCUMENTO: ${chunk.sourceTitle}${metadata ? ` | ${metadata}` : ""}]: ${chunk.content}`;
+        return `[DOCUMENTO: ${chunk.sourceTitle}${metadata ? ` | ${metadata}` : ""}]: ${normalizeGoogleMapsUrl(chunk.content)}`;
       })
       .join("\n\n---\n\n");
 
