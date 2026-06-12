@@ -2,12 +2,14 @@ import type { KnowledgeBaseItem, KnowledgeBaseChunk } from "@shared/schema";
 import OpenAI from "openai";
 import { storage } from "./storage";
 import { GoogleGenAI } from "@google/genai";
-import { classifyConversationIntent, extractServiceNameFromSectionMenu, getRequestedSectionLabel } from "./conversation-policy";
+import { classifyConversationIntent, getActiveServiceName, getRequestedSectionLabel } from "./conversation-policy";
 
 type MessageLike = {
   role: string;
   content: string;
 };
+
+type RetrievedChunk = KnowledgeBaseChunk & { sourceTitle: string };
 
 export type KnowledgeContextResult = {
   context: string;
@@ -21,24 +23,57 @@ const CHUNK_OVERLAP = 200;
 const MAX_CONCURRENCY = 5;
 const VECTOR_DIMENSIONS = 1536;
 
-function buildRetrievalQuery(messages: MessageLike[]): string | null {
+function normalizeForMatch(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getRetrievalState(messages: MessageLike[]): {
+  query: string | null;
+  activeService: string | null;
+  shouldPreferActiveService: boolean;
+} {
   const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content;
-  if (!lastUserMessage) return null;
-
-  const activeService = [...messages]
-    .slice(0, -1)
-    .reverse()
-    .filter(m => m.role === "assistant")
-    .map(m => extractServiceNameFromSectionMenu(m.content))
-    .find((serviceName): serviceName is string => Boolean(serviceName));
-  const intent = classifyConversationIntent(lastUserMessage, messages);
-  const requestedSection = getRequestedSectionLabel(lastUserMessage, messages);
-
-  if (activeService && (intent === "section_request" || intent === "complete_record")) {
-    return `${activeService} ${requestedSection || lastUserMessage}`;
+  if (!lastUserMessage) {
+    return { query: null, activeService: null, shouldPreferActiveService: false };
   }
 
-  return lastUserMessage;
+  const activeService = getActiveServiceName(messages);
+  const intent = classifyConversationIntent(lastUserMessage, messages);
+  const requestedSection = getRequestedSectionLabel(lastUserMessage, messages);
+  const shouldPreferActiveService = Boolean(activeService && (intent === "section_request" || intent === "complete_record"));
+
+  if (activeService && shouldPreferActiveService) {
+    return {
+      query: `${activeService} ${requestedSection || lastUserMessage}`,
+      activeService,
+      shouldPreferActiveService,
+    };
+  }
+
+  return { query: lastUserMessage, activeService, shouldPreferActiveService };
+}
+
+function filterChunksByActiveService(chunks: RetrievedChunk[], activeService: string | null): RetrievedChunk[] {
+  if (!activeService) return chunks;
+
+  const normalizedService = normalizeForMatch(activeService);
+  const serviceTerms = normalizedService
+    .split(" ")
+    .filter((term) => term.length >= 4);
+
+  if (serviceTerms.length === 0) return chunks;
+
+  const matched = chunks.filter((chunk) => {
+    const haystack = normalizeForMatch(`${chunk.sourceTitle} ${chunk.content}`);
+    return haystack.includes(normalizedService) || serviceTerms.every((term) => haystack.includes(term));
+  });
+
+  return matched.length > 0 ? matched : chunks;
 }
 
 function normalizeEmbedding(values: number[]): number[] {
@@ -324,7 +359,8 @@ export async function buildKnowledgeContext(
   const chatbot = await storage.getChatbot(chatbotId);
   if (!chatbot) return { context: "", strategy: "empty" };
 
-  const retrievalQuery = buildRetrievalQuery(messages);
+  const retrievalState = getRetrievalState(messages);
+  const retrievalQuery = retrievalState.query;
   
   if (!retrievalQuery) {
     return { context: "", strategy: "empty" };
@@ -332,7 +368,12 @@ export async function buildKnowledgeContext(
 
   try {
     const queryEmbedding = await generateEmbedding(retrievalQuery, chatbot);
-    const similarChunks = await storage.searchSimilarChunks(chatbotId, queryEmbedding, 5);
+    const chunkLimit = retrievalState.shouldPreferActiveService ? 20 : 5;
+    const retrievedChunks = await storage.searchSimilarChunks(chatbotId, queryEmbedding, chunkLimit);
+    const similarChunks = filterChunksByActiveService(
+      retrievedChunks,
+      retrievalState.shouldPreferActiveService ? retrievalState.activeService : null,
+    ).slice(0, 5);
 
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
@@ -353,11 +394,11 @@ export async function buildKnowledgeContext(
 4. Si el usuario pide un apartado especifico, responde SOLO ese apartado.
 5. Solo entrega todos los apartados si el usuario pide "ficha completa", "todos los datos" o "toda la informacion".
 6. NO menciones los nombres de los archivos ni pongas citas en tu respuesta final.
-7. Si la informacion no esta abajo, indica que no tienes esa informacion.
+7. Si la informacion no esta abajo, indica que no esta especificada en la informacion disponible.
 8. Mantén un tono profesional, breve y directo.
 9. Si la consulta es ambigua, pide una aclaracion y ofrece opciones breves.
 10. Si la consulta esta fuera de tramites, servicios, programas, talleres o apoyos del DIF Zapopan, redirige al portal o dependencia oficial correspondiente.
-11. Si el usuario describe emergencia o riesgo inmediato, indica llamar al 911 y no intentes resolverlo como tramite.
+11. Si el usuario describe violencia, maltrato, golpes, abuso, abandono, riesgo o emergencia, indica llamar al 911 si hay riesgo inmediato y orienta a servicios de reporte o atencion del DIF Zapopan.
 12. Si el usuario pide hablar con una persona, ayuda a identificar el tema y ofrece consultar lugar y contacto cuando exista en la base de conocimiento.
 13. Para servicio seleccionado usa exactamente este formato y no uses corchetes:
 [Nombre del servicio]
@@ -374,6 +415,10 @@ Que informacion quieres conocer?
 6. Lugar y contacto
 7. Nota importante
 8. Ficha completa
+
+14. Si hay servicio activo y el usuario pide costo, requisitos, documentacion, ubicacion, horario, telefono, contacto o ficha completa, usa solamente los fragmentos del servicio activo.
+15. No sugieras documentacion si no aparece explicitamente en los fragmentos.
+16. Si el usuario pregunta ubicacion o contacto, prioriza direccion, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}

@@ -55,6 +55,9 @@ const HUMAN_HANDOFF_KEYWORDS =
 const EMERGENCY_KEYWORDS =
   /\b(emergencia|peligro inmediato|riesgo inmediato|me quiero suicidar|suicidio|violencia en este momento|me estan agrediendo|me est[aá]n agrediendo|amenaza inmediata|lesion grave|lesi[oó]n grave)\b/i;
 
+const SAFETY_RISK_KEYWORDS =
+  /\b(violencia|maltrato|golpea|golpes|abuso|abandono|peligro|riesgo|amenaza|ninos en riesgo|ni[nñ]os en riesgo|ni[nñ]as en riesgo|adulto mayor abandonado|persona mayor abandonada|omision de cuidado|omisi[oó]n de cuidado)\b/i;
+
 const OUT_OF_SCOPE_KEYWORDS =
   /\b(clima|pronostico|pron[oó]stico|futbol|f[uú]tbol|receta de cocina|matematicas|matem[aá]ticas|tarea escolar|programar en|codigo fuente|c[oó]digo fuente|pasaporte|licencia de conducir|predial|multas de transito|multas de tr[aá]nsito|curp en linea|curp en l[ií]nea)\b/i;
 
@@ -131,6 +134,19 @@ export function buildEmergencyResponse(): string {
 Yo puedo orientar sobre servicios del DIF Zapopan, pero no sustituyo atencion de emergencia ni intervencion de una autoridad.
 
 Cuando la situacion este segura, puedo ayudarte a buscar servicios relacionados con atencion, reportes, apoyo o canalizacion.`;
+}
+
+export function buildSafetyRiskResponse(): string {
+  return `Lamento la situacion. Si hay riesgo inmediato para una nina, nino, adolescente, persona adulta mayor o cualquier persona, llama al 911.
+
+Tambien puedo orientarte con servicios de reporte y atencion del DIF Zapopan relacionados con maltrato, abandono, violencia o situacion de vulnerabilidad.
+
+Para ayudarte mejor, dime si se trata de:
+
+1. Ninas, ninos o adolescentes
+2. Personas adultas mayores
+3. Violencia familiar
+4. Otra situacion de riesgo`;
 }
 
 export function buildHumanHandoffResponse(): string {
@@ -272,6 +288,14 @@ export function extractServiceNameFromSectionMenu(content: string): string | nul
   return firstLine || null;
 }
 
+export function getActiveServiceName(messages: ConversationMessage[]): string | null {
+  return [...messages]
+    .reverse()
+    .filter((message) => message.role === "assistant")
+    .map((message) => extractServiceNameFromSectionMenu(message.content))
+    .find((serviceName): serviceName is string => Boolean(serviceName)) || null;
+}
+
 export function normalizeDirectServiceName(content: string): string {
   return content
     .trim()
@@ -335,6 +359,7 @@ export function classifyConversationIntent(
 
   if (COMPLETE_RECORD_KEYWORDS.test(normalized)) return "complete_record";
   if (EMERGENCY_KEYWORDS.test(normalized)) return "emergency";
+  if (SAFETY_RISK_KEYWORDS.test(normalized)) return "emergency";
   if (HUMAN_HANDOFF_KEYWORDS.test(normalized)) return "human_handoff";
   if (SECTION_KEYWORDS.test(normalized)) return "section_request";
   if (LIST_KEYWORDS.test(normalized)) return "list";
@@ -404,7 +429,9 @@ export function getDeterministicWidgetResponse(messages: ConversationMessage[]):
     return buildOutOfScopeResponse();
   }
   if (currentIntent === "emergency") {
-    return buildEmergencyResponse();
+    return EMERGENCY_KEYWORDS.test(currentContent)
+      ? buildEmergencyResponse()
+      : buildSafetyRiskResponse();
   }
   if (currentIntent === "human_handoff") {
     return buildHumanHandoffResponse();
@@ -450,7 +477,7 @@ Estas reglas son obligatorias y tienen prioridad sobre los fragmentos RAG:
 6. Nunca inventes datos faltantes; usa "No encontre ese dato en la informacion disponible."
 7. Si la consulta es ambigua, pide una aclaracion breve y ofrece opciones.
 8. Si la consulta esta fuera de DIF Zapopan, dilo con claridad y redirige al portal o dependencia oficial correspondiente.
-9. Si el usuario describe una emergencia o riesgo inmediato, indica llamar al 911 y aclara que no sustituyes atencion de emergencia.
+9. Si el usuario describe violencia, maltrato, golpes, abuso, abandono, riesgo o emergencia, activa protocolo prioritario: indica llamar al 911 si hay riesgo inmediato y despues orienta a servicios de reporte o atencion del DIF Zapopan.
 10. Si el usuario pide hablar con una persona, ayuda a ubicar el tema o servicio y ofrece pedir lugar/contacto si esta en la base de conocimiento.
 11. Para informacion complementaria relacionada con DIF, responde en general solo si no inventas datos; despues pide que el usuario elija tramite, servicio, programa, taller o apoyo.
 12. Cuando el usuario conteste con un numero desde el menu de apartados: 1=En que consiste, 2=A quien va dirigido, 3=Requisitos, 4=Costos, 5=Horario/vigencia/convocatoria, 6=Lugar y contacto, 7=Nota importante, 8=Ficha completa.
@@ -472,6 +499,9 @@ Que informacion quieres conocer?
 
 Puedes escribir el numero o el apartado. Tambien puedes pedir "ficha completa".
 14. Nunca pongas el nombre del servicio entre corchetes en la respuesta final.
+15. Cuando ya haya un servicio activo y el usuario pregunte por "ese servicio", costo, requisitos, documentacion, ubicacion, horario, telefono, contacto o ficha completa, responde usando exclusivamente la informacion del servicio activo. No mezcles informacion de otros servicios.
+16. Si un campo solicitado no aparece en la informacion recuperada, di que no esta especificado. No sugieras documentos, costos, horarios, telefonos ni ubicaciones no recuperadas.
+17. Para preguntas de ubicacion o contacto, prioriza direccion, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
 === FIN POLITICA RUNTIME ===
 
 ${knowledgeContext}`;

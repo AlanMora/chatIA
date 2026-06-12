@@ -4,6 +4,7 @@ import {
   deriveConversationState,
   extractServiceOptionsFromList,
   extractServiceOptionsWithDescriptionsFromList,
+  getActiveServiceName,
   getRequestedSectionLabel,
   buildAmbiguousHelpResponse,
   getDeterministicWidgetResponse,
@@ -109,6 +110,8 @@ const intentCases: IntentCase[] = [
   { name: "informacion complementaria", input: "que es el DIF", expected: "complementary" },
   { name: "fuera de alcance", input: "como tramito mi pasaporte", expected: "out_of_scope" },
   { name: "emergencia", input: "hay una emergencia y peligro inmediato", expected: "emergency" },
+  { name: "riesgo por maltrato", input: "mi vecino golpea a sus hijos, que puedo hacer", expected: "emergency" },
+  { name: "riesgo adulto mayor", input: "hay un adulto mayor abandonado", expected: "emergency" },
   { name: "contacto humano", input: "quiero hablar con una persona real", expected: "human_handoff" },
   {
     name: "seleccion numerica desde listado",
@@ -228,6 +231,12 @@ const responseCases: ResponseCase[] = [
     excludes: ["ficha completa", "requisitos"],
   },
   {
+    name: "riesgo por maltrato activa protocolo prioritario",
+    messages: [{ role: "user", content: "mi vecino golpea a sus hijos, que puedo hacer" }],
+    includes: ["llama al 911", "servicios de reporte", "Ninas, ninos o adolescentes"],
+    excludes: ["ficha completa", "requisitos"],
+  },
+  {
     name: "contacto humano pide tema",
     messages: [{ role: "user", content: "quiero hablar con una persona real" }],
     includes: ["Para atencion con una persona", "Adultos mayores", "Ayuda alimentaria"],
@@ -329,7 +338,14 @@ try {
   assert(runtimePrompt.includes("Contexto RAG"), "runtime prompt sin contexto RAG");
   assert(runtimePrompt.includes("consulta es ambigua"), "runtime prompt sin politica UX ambigua");
   assert(buildAmbiguousHelpResponse().includes("Buscar un tramite o servicio"), "respuesta ambigua sin opciones");
-  passed += 7;
+  assert(
+    getActiveServiceName([
+      { role: "assistant", content: sectionMenu },
+      { role: "user", content: "cuanto cuesta ese servicio" },
+    ]) === "Afiliacion al INAPAM",
+    "getActiveServiceName: no detecta servicio activo desde menu",
+  );
+  passed += 8;
 } catch (error) {
   failed += 1;
   console.error(`FAIL support - ${(error as Error).message}`);
