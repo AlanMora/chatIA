@@ -33,6 +33,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/script ./script
 COPY --from=build /app/seed ./seed
+COPY --from=build /app/jsonl ./jsonl
 COPY --from=build /app/drizzle.config.ts ./
 
 RUN mkdir -p /app/uploads
