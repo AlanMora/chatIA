@@ -30,11 +30,13 @@ COPY --from=build /app/node_modules ./node_modules
 
 # Copiar archivos de la aplicacion
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/server ./server
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/script ./script
 COPY --from=build /app/seed ./seed
 COPY --from=build /app/jsonl ./jsonl
 COPY --from=build /app/drizzle.config.ts ./
+COPY --from=build /app/tsconfig.json ./
 
 RUN mkdir -p /app/uploads
 
