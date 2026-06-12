@@ -139,7 +139,7 @@ const flowCases: FlowCase[] = [
       {
         user: "5",
         expectedIntent: "service_selection",
-        deterministicIncludes: ["Afiliacion al INAPAM", "Que informacion quieres conocer?", "8. Ficha completa"],
+        deterministicIncludes: ["Afiliacion al INAPAM", "¿Qué información quieres conocer?", "8. Ficha completa"],
         assistantFixture: inapanMenu,
       },
       {
@@ -171,7 +171,7 @@ const flowCases: FlowCase[] = [
       {
         user: "platicas prematrimoniales",
         expectedIntent: "direct_service",
-        deterministicIncludes: ["platicas prematrimoniales", "Que informacion quieres conocer?", "4. Costos"],
+        deterministicIncludes: ["platicas prematrimoniales", "¿Qué información quieres conocer?", "4. Costos"],
         assistantFixture: prematrimonialMenu,
       },
       {
@@ -210,7 +210,7 @@ const flowCases: FlowCase[] = [
       {
         user: "1",
         expectedIntent: "service_selection",
-        deterministicIncludes: ["Programa de Ayuda Alimentaria Directa", "Que informacion quieres conocer?"],
+        deterministicIncludes: ["Programa de Ayuda Alimentaria Directa", "¿Qué información quieres conocer?"],
         assistantFixture: ayudaMenu,
       },
       {
@@ -235,13 +235,13 @@ const flowCases: FlowCase[] = [
       {
         user: "Afiliacion al INAPAM",
         expectedIntent: "direct_service",
-        deterministicIncludes: ["Afiliacion al INAPAM", "Que informacion quieres conocer?"],
+        deterministicIncludes: ["Afiliacion al INAPAM", "¿Qué información quieres conocer?"],
         assistantFixture: inapanMenu,
       },
       {
         user: "talleres deportivos",
         expectedIntent: "direct_service",
-        deterministicIncludes: ["talleres deportivos", "Que informacion quieres conocer?"],
+        deterministicIncludes: ["talleres deportivos", "¿Qué información quieres conocer?"],
         assistantFixture: "talleres deportivos\n\nQue informacion quieres conocer?\n\n1. En que consiste\n2. A quien va dirigido\n3. Requisitos\n4. Costos\n5. Horario, vigencia o convocatoria\n6. Lugar y contacto\n7. Nota importante\n8. Ficha completa\n\nPuedes escribir el numero o el apartado.",
       },
       {

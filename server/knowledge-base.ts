@@ -2,7 +2,12 @@ import type { KnowledgeBaseItem, KnowledgeBaseChunk } from "@shared/schema";
 import OpenAI from "openai";
 import { storage } from "./storage";
 import { GoogleGenAI } from "@google/genai";
-import { classifyConversationIntent, getActiveServiceName, getRequestedSectionLabel } from "./conversation-policy";
+import {
+  classifyConversationIntent,
+  getActiveServiceName,
+  getRequestedSectionLabel,
+  mentionsSpecificServiceTopic,
+} from "./conversation-policy";
 
 type MessageLike = {
   role: string;
@@ -54,7 +59,12 @@ function getRetrievalState(messages: MessageLike[]): {
   const activeService = getActiveServiceName(messages);
   const intent = classifyConversationIntent(lastUserMessage, messages);
   const requestedSection = getRequestedSectionLabel(lastUserMessage, messages);
-  const shouldPreferActiveService = Boolean(activeService && (intent === "section_request" || intent === "complete_record"));
+  const mentionsDifferentService = Boolean(activeService && mentionsSpecificServiceTopic(lastUserMessage) && !normalizeForMatch(lastUserMessage).includes(normalizeForMatch(activeService)));
+  const shouldPreferActiveService = Boolean(
+    activeService &&
+    !mentionsDifferentService &&
+    (intent === "section_request" || intent === "complete_record"),
+  );
   const preferredSkills = getPreferredSkills(lastUserMessage);
 
   if (activeService && shouldPreferActiveService) {
@@ -124,6 +134,28 @@ function rankChunksByPreferredSkills(chunks: RetrievedChunk[], preferredSkills: 
     const bScore = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
     return aScore - bScore;
   });
+}
+
+function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): RetrievedChunk[] {
+  const normalized = normalizeForMatch(query);
+  const entityTerms: string[] = [];
+
+  if (/\bhabilitecas?\b/.test(normalized)) entityTerms.push("habiliteca");
+  if (/\bplaticas prematrimoniales\b|\bprematrimoniales\b/.test(normalized)) entityTerms.push("prematrimonial");
+  if (/\bautismo\b/.test(normalized)) entityTerms.push("autismo");
+  if (/\binapam\b/.test(normalized)) entityTerms.push("inapam");
+  if (/\bcemam\b/.test(normalized)) entityTerms.push("cemam");
+  if (/\bcaic\b/.test(normalized)) entityTerms.push("caic");
+  if (/\bnido\b/.test(normalized)) entityTerms.push("nido");
+
+  if (entityTerms.length === 0) return chunks;
+
+  const matched = chunks.filter((chunk) => {
+    const haystack = normalizeForMatch(`${chunk.sourceTitle} ${chunk.content} ${JSON.stringify(chunk.metadata || {})}`);
+    return entityTerms.some((term) => haystack.includes(term));
+  });
+
+  return matched.length > 0 ? matched : chunks;
 }
 
 function sourceUrlFromChunk(chunk: RetrievedChunk): string | null {
@@ -425,13 +457,14 @@ export async function buildKnowledgeContext(
 
   try {
     const queryEmbedding = await generateEmbedding(retrievalQuery, chatbot);
-    const chunkLimit = retrievalState.shouldPreferActiveService ? 20 : 5;
+    const chunkLimit = retrievalState.shouldPreferActiveService || retrievalState.preferredSkills.length > 0 ? 30 : 8;
     const retrievedChunks = await storage.searchSimilarChunks(chatbotId, queryEmbedding, chunkLimit);
     const activeServiceChunks = filterChunksByActiveService(
       retrievedChunks,
       retrievalState.shouldPreferActiveService ? retrievalState.activeService : null,
     );
-    const similarChunks = rankChunksByPreferredSkills(activeServiceChunks, retrievalState.preferredSkills).slice(0, 5);
+    const entityChunks = filterChunksByQueryEntity(activeServiceChunks, retrievalQuery);
+    const similarChunks = rankChunksByPreferredSkills(entityChunks, retrievalState.preferredSkills).slice(0, 5);
 
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };

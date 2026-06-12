@@ -158,7 +158,7 @@ const responseCases: ResponseCase[] = [
       { role: "assistant", content: cemamList },
       { role: "user", content: "5" },
     ],
-    includes: ["Afiliacion al INAPAM", "Te acompano con este servicio", "Que informacion quieres conocer?", "8. Ficha completa"],
+    includes: ["Afiliacion al INAPAM", "Te acompaño con este servicio", "¿Qué información quieres conocer?", "8. Ficha completa"],
     excludes: ["Proceso para inscribir", "Documentacion requerida", "Servicio gratuito"],
   },
   {
@@ -167,19 +167,19 @@ const responseCases: ResponseCase[] = [
       { role: "assistant", content: cemamDescriptiveList },
       { role: "user", content: "1" },
     ],
-    includes: ["Servicios Basicos y Asistenciales", "En breve: Atencion en estetica, comedor, transporte y biblioteca.", "Que informacion quieres conocer?", "8. Ficha completa"],
+    includes: ["Servicios Basicos y Asistenciales", "En breve: Atencion en estetica, comedor, transporte y biblioteca.", "¿Qué información quieres conocer?", "8. Ficha completa"],
     excludes: ["Gratuito"],
   },
   {
     name: "servicio directo devuelve menu",
     messages: [{ role: "user", content: "Afiliación al INAPAM" }],
-    includes: ["Afiliación al INAPAM", "Te acompano con este servicio", "Que informacion quieres conocer?", "3. Requisitos"],
+    includes: ["Afiliación al INAPAM", "Te acompaño con este servicio", "¿Qué información quieres conocer?", "3. Requisitos"],
     excludes: ["Proceso para inscribir", "Adultos mayores", "Servicio gratuito"],
   },
   {
     name: "directo prematrimonial devuelve menu",
     messages: [{ role: "user", content: "platicas prematrimoniales" }],
-    includes: ["platicas prematrimoniales", "Te acompano con este servicio", "Que informacion quieres conocer?", "4. Costos"],
+    includes: ["platicas prematrimoniales", "Te acompaño con este servicio", "¿Qué información quieres conocer?", "4. Costos"],
     excludes: ["Cuota aproximada", "actas de nacimiento", "comprobante de transferencia"],
   },
   {

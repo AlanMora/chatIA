@@ -75,17 +75,31 @@ const SECTION_BY_NUMBER: Record<number, string> = {
   8: "Ficha completa",
 };
 
+function normalizeForIntent(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function mentionsSpecificServiceTopic(content: string): boolean {
+  const normalized = normalizeForIntent(content);
+  return /\b(platicas prematrimoniales|prematrimoniales|inapam|cemam|kokone|autismo|talleres deportivos|ayuda alimentaria|carril rosa|testamento|habiliteca|caic|nido)\b/.test(normalized);
+}
+
 export function buildServiceSectionMenu(serviceName: string, description?: string): string {
   const cleanDescription = description?.trim();
 
   return `${serviceName}
 
-${cleanDescription ? `En breve: ${cleanDescription}` : "Te acompano con este servicio. Puedo mostrarte la informacion por partes para que sea mas facil revisarla."}
+${cleanDescription ? `En breve: ${cleanDescription}` : "Te acompaño con este servicio. Puedo mostrarte la información por partes para que sea más fácil revisarla."}
 
-Que informacion quieres conocer?
+¿Qué información quieres conocer?
 
-1. En que consiste
-2. A quien va dirigido
+1. En qué consiste
+2. A quién va dirigido
 3. Requisitos
 4. Costos
 5. Horario, vigencia o convocatoria
@@ -93,9 +107,9 @@ Que informacion quieres conocer?
 7. Nota importante
 8. Ficha completa
 
-Puedes escribir el numero o el apartado. Tambien puedes pedir "ficha completa".
+Puedes escribir el número o el apartado. También puedes pedir "ficha completa".
 
-Si no sabes por donde empezar, te sugiero revisar primero "En que consiste" o "Requisitos".`;
+Si no sabes por dónde empezar, te sugiero revisar primero "En qué consiste" o "Requisitos".`;
 }
 
 export function buildAmbiguousHelpResponse(): string {
@@ -278,14 +292,33 @@ export function extractServiceNameFromSectionMenu(content: string): string | nul
     /que informacion quieres conocer|ficha completa/i.test(content) &&
     /requisitos|costos|lugar y contacto/i.test(content);
 
-  if (!isSectionMenu) return null;
+  const sectionLabels = new Set([
+    "en que consiste",
+    "en qué consiste",
+    "a quien va dirigido",
+    "a quién va dirigido",
+    "requisitos",
+    "costos",
+    "horario, vigencia o convocatoria",
+    "lugar y contacto",
+    "nota importante",
+    "ficha completa",
+  ]);
 
-  const firstLine = content
+  const nonEmptyLines = content
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .find((line) => line.length > 0);
+    .filter((line) => line.length > 0);
 
-  return firstLine || null;
+  if (isSectionMenu) return nonEmptyLines[0] || null;
+
+  const firstLine = nonEmptyLines[0];
+  const secondLine = nonEmptyLines[1];
+  if (firstLine && secondLine && sectionLabels.has(secondLine.toLowerCase())) {
+    return firstLine;
+  }
+
+  return null;
 }
 
 export function getActiveServiceName(messages: ConversationMessage[]): string | null {
@@ -502,6 +535,7 @@ Puedes escribir el numero o el apartado. Tambien puedes pedir "ficha completa".
 15. Cuando ya haya un servicio activo y el usuario pregunte por "ese servicio", costo, requisitos, documentacion, ubicacion, horario, telefono, contacto o ficha completa, responde usando exclusivamente la informacion del servicio activo. No mezcles informacion de otros servicios.
 16. Si un campo solicitado no aparece en la informacion recuperada, di que no esta especificado. No sugieras documentos, costos, horarios, telefonos ni ubicaciones no recuperadas.
 17. Para preguntas de ubicacion o contacto, prioriza direccion, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
+18. Usa ortografía institucional con acentos: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño". No escribas "Encontre", "Cual", "Que informacion" ni "acompanó/acompaño" sin tilde.
 === FIN POLITICA RUNTIME ===
 
 ${knowledgeContext}`;

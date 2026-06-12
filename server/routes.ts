@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertChatbotSchema, insertKnowledgeBaseItemSchema, type Chatbot, type InsertKnowledgeBaseItem } from "@shared/schema";
+import { insertChatbotSchema, insertKnowledgeBaseItemSchema, type Chatbot, type InsertKnowledgeBaseItem, type KnowledgeBaseItem } from "@shared/schema";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import multer from "multer";
@@ -103,7 +103,7 @@ function extractBriefServiceDescriptionFromContext(context: string): string | nu
     const candidate = explicitSection?.[1] || cleaned;
     const sentence = candidate
       .split(/\n/)
-      .map((line) => line.trim().replace(/^[-*]\s*/, ""))
+      .map((line) => line.trim().replace(/^[-*]\s*/, "").replace(/^(descripci[oó]n\s+breve|breve)\s*:\s*/i, ""))
       .filter((line) => line.length > 0)
       .find((line) =>
         line.length >= 25 &&
@@ -122,9 +122,76 @@ function extractBriefServiceDescriptionFromContext(context: string): string | nu
 function enrichDeterministicServiceMenu(response: string, description: string | null): string {
   if (!description) return response;
   return response.replace(
-    "Te acompano con este servicio. Puedo mostrarte la informacion por partes para que sea mas facil revisarla.",
+    "Te acompaño con este servicio. Puedo mostrarte la información por partes para que sea más fácil revisarla.",
     `En breve: ${description}`,
   );
+}
+
+function normalizeForCitizenQuery(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getMetadataString(item: KnowledgeBaseItem, key: string): string | null {
+  const value = item.metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isHabilitecaItem(item: KnowledgeBaseItem): boolean {
+  const haystack = normalizeForCitizenQuery(`${item.title} ${item.content} ${JSON.stringify(item.metadata || {})}`);
+  return item.skill === "ubicaciones_institucionales" &&
+    (haystack.includes("tipo habilitecas") || haystack.includes("habiliteca"));
+}
+
+async function buildDeterministicLocationResponse(chatbotId: number, message: string): Promise<string | null> {
+  const normalized = normalizeForCitizenQuery(message);
+  const asksHabilitecas = /\bhabilitecas?\b/.test(normalized);
+  if (!asksHabilitecas) return null;
+
+  const asksCount = /\b(cuantas|cuantos|numero|total)\b/.test(normalized);
+  const asksList = /\b(todas|lista|listado|cuales|ubicaciones|direcciones|donde)\b/.test(normalized);
+  const asksNear = /\b(cerca|cercas|cercana|cercano|mas cercana|mas cercano)\b/.test(normalized);
+
+  if (!asksCount && !asksList && !asksNear) return null;
+
+  const items = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
+  const habilitecas = items
+    .filter(isHabilitecaItem)
+    .sort((a, b) => a.title.localeCompare(b.title, "es"));
+
+  if (habilitecas.length === 0) {
+    return "No encontré Habilitecas especificadas en la información disponible.";
+  }
+
+  if (asksNear) {
+    return `Para decirte cuál Habiliteca te queda más cerca necesito tu colonia o una zona de referencia.
+
+En la información disponible tengo ${habilitecas.length} centros registrados como Habilitecas. Si me dices tu colonia, te ayudo a ubicar opciones cercanas.`;
+  }
+
+  const intro = asksCount
+    ? `Tengo ${habilitecas.length} centros registrados como Habilitecas en la información disponible.`
+    : `Estas son las Habilitecas registradas en la información disponible:`;
+
+  const lines = habilitecas.slice(0, 18).map((item, index) => {
+    const direccion = getMetadataString(item, "direccion");
+    const telefono = getMetadataString(item, "telefono");
+    const details = [
+      direccion ? `Dirección: ${direccion}` : null,
+      telefono ? `Teléfono: ${telefono}` : null,
+    ].filter(Boolean).join(". ");
+    return `${index + 1}. ${item.title}${details ? `\n   ${details}.` : ""}`;
+  });
+
+  return `${intro}
+
+${lines.join("\n")}
+
+Si quieres, dime tu colonia y te ayudo a identificar cuáles podrían quedarte más cerca.`;
 }
 
 const knowledgeUploadDir = path.resolve(process.cwd(), "uploads", "knowledge-base");
@@ -1581,14 +1648,19 @@ export async function registerRoutes(
 
       // Get conversation history
       const messages = await storage.getWidgetMessagesByConversation(conversation.id);
+      const deterministicLocationResponse = await buildDeterministicLocationResponse(chatbotId, message);
       let deterministicResponse = getDeterministicWidgetResponse(messages);
       let deterministicKnowledgeResult: Awaited<ReturnType<typeof buildKnowledgeContext>> | null = null;
       const currentIntent = classifyConversationIntent(message, messages);
 
+      if (deterministicLocationResponse) {
+        deterministicResponse = deterministicLocationResponse;
+      }
+
       if (
         deterministicResponse &&
         currentIntent === "direct_service" &&
-        deterministicResponse.includes("Te acompano con este servicio")
+        deterministicResponse.includes("Te acompaño con este servicio")
       ) {
         deterministicKnowledgeResult = await buildKnowledgeContext(chatbotId, messages);
         const briefDescription = extractBriefServiceDescriptionFromContext(deterministicKnowledgeResult.context);
