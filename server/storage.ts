@@ -309,6 +309,13 @@ export class DatabaseStorage implements IStorage {
       FROM knowledge_base_chunks kbc
       JOIN knowledge_base_items kbi ON kbc.item_id = kbi.id
       WHERE kbc.chatbot_id = ${chatbotId}
+        AND (
+          kbi.skill IS DISTINCT FROM 'tramites_servicios_dif_zapopan'
+          OR lower(coalesce(kbi.metadata->>'vigente', '')) IN ('true', '1', 'si', 'sí', 'vigente', 'activo', 'activa')
+          OR lower(coalesce(kbi.metadata->>'activo', '')) IN ('true', '1', 'si', 'sí', 'vigente', 'activo', 'activa')
+          OR lower(coalesce(kbi.metadata->>'estatus', '')) IN ('true', '1', 'si', 'sí', 'vigente', 'activo', 'activa', 'en funcionamiento', 'publicado', 'publicada')
+          OR lower(coalesce(kbi.metadata->>'estado', '')) IN ('true', '1', 'si', 'sí', 'vigente', 'activo', 'activa', 'en funcionamiento', 'publicado', 'publicada')
+        )
       ORDER BY kbc.embedding <=> ${embeddingStr}::vector
       LIMIT ${limit}
     `);

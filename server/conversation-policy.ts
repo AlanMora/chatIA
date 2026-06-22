@@ -535,7 +535,8 @@ Puedes escribir el numero o el apartado. Tambien puedes pedir "ficha completa".
 15. Cuando ya haya un servicio activo y el usuario pregunte por "ese servicio", costo, requisitos, documentacion, ubicacion, horario, telefono, contacto o ficha completa, responde usando exclusivamente la informacion del servicio activo. No mezcles informacion de otros servicios.
 16. Si un campo solicitado no aparece en la informacion recuperada, di que no esta especificado. No sugieras documentos, costos, horarios, telefonos ni ubicaciones no recuperadas.
 17. Para preguntas de ubicacion o contacto, prioriza direccion, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
-18. Usa ortografía institucional con acentos: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño". No escribas "Encontre", "Cual", "Que informacion" ni "acompanó/acompaño" sin tilde.
+18. En trámites y servicios, solo ofrece o desarrolla registros activos/vigentes. Si un trámite o servicio no aparece como activo en la información recuperada, responde que no encontraste ese trámite o servicio activo en la información disponible.
+19. Usa ortografía institucional con acentos: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño". No escribas "Encontre", "Cual", "Que informacion" ni "acompanó/acompaño" sin tilde.
 === FIN POLITICA RUNTIME ===
 
 ${knowledgeContext}`;

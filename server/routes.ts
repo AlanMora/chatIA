@@ -1684,8 +1684,12 @@ export async function registerRoutes(
         deterministicResponse.includes("Te acompaño con este servicio")
       ) {
         deterministicKnowledgeResult = await buildKnowledgeContext(chatbotId, messages);
-        const briefDescription = extractBriefServiceDescriptionFromContext(deterministicKnowledgeResult.context);
-        deterministicResponse = enrichDeterministicServiceMenu(deterministicResponse, briefDescription);
+        if ((deterministicKnowledgeResult.chunksFound || 0) === 0) {
+          deterministicResponse = "No encontré ese trámite o servicio activo en la información disponible. Puedes intentar con otro nombre o pedirme un listado por tema.";
+        } else {
+          const briefDescription = extractBriefServiceDescriptionFromContext(deterministicKnowledgeResult.context);
+          deterministicResponse = enrichDeterministicServiceMenu(deterministicResponse, briefDescription);
+        }
       }
       
       // Retrieve only the most relevant knowledge snippets so the prompt stays usable

@@ -530,6 +530,7 @@ Que informacion quieres conocer?
 16. Si el usuario pregunta ubicacion o contacto, prioriza direccion, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
 17. Si aparece source_url en el fragmento, puedes mencionar "Fuente: [url]" al final de forma breve.
 18. No mezcles tramites/servicios con programas salvo que el usuario lo pida y ambos fragmentos indiquen relacion clara.
+19. Para tramites y servicios, solo responde con registros activos o vigentes. Si no hay fragmentos activos/vigentes del tramite o servicio solicitado, di que no encontraste ese tramite o servicio activo en la informacion disponible.
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}
