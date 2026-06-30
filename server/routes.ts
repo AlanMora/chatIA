@@ -135,12 +135,13 @@ function extractBriefServiceDescriptionFromContext(context: string): string | nu
       .filter((line) => line.length > 0)
       .find((line) =>
         line.length >= 25 &&
-        line.length <= 220 &&
+        line.length <= 180 &&
         !/^(requisitos?|costos?|horario|lugar|contacto|nota|documento|tel[eé]fono|direcci[oó]n)\b/i.test(line),
       );
 
     if (sentence) {
-      return sentence.replace(/\s+/g, " ").replace(/[.;:]\s*$/, ".");
+      const normalized = sentence.replace(/\s+/g, " ").replace(/[.;:]\s*$/, ".");
+      return normalized.length > 180 ? `${normalized.slice(0, 177).trim()}...` : normalized;
     }
   }
 
@@ -359,7 +360,7 @@ function analyzeUatExport(exportData: any) {
     ["sin_dato_o_no_encontrado", /no encontr[ée]|no encontre|no est[aá] especificad|no encontré ese tr[aá]mite/i],
     ["terminos_internos", /chunk|metadata|base vectorial|retrieved_context|tool_result|many_services|no_context/i],
     ["posible_invencion_pasos", /pasos generales|basados en informaci[oó]n disponible|acudir al DIF|iniciar tr[aá]mite/i],
-    ["formato_inconsistente", /Encontre|Cual quieres|Que informacion|tramite|Tambien/i],
+    ["formato_inconsistente", /\b(Encontre|Cual quieres|Que informacion|Tambien|numero)\b/i],
   ];
 
   for (const item of conversations) {
@@ -2147,8 +2148,8 @@ export async function registerRoutes(
 
       if (!fullResponse.trim()) {
         fullResponse = knowledgeContextResult.chunksFound && knowledgeContextResult.chunksFound > 0
-          ? "No pude generar una respuesta con la informacion disponible. Intenta pedir un apartado especifico como requisitos, costos, horarios, lugar y contacto, o ficha completa."
-          : "No encontre informacion suficiente en la base de conocimiento para responder eso. Puedes intentar con el nombre del tramite, servicio, programa o taller.";
+          ? "No pude generar una respuesta con la información disponible. Intenta pedir un apartado específico como requisitos, costos, horarios, lugar y contacto, o ficha completa."
+          : "No encontré información suficiente en la base de conocimiento para responder eso. Puedes intentar con el nombre del trámite, servicio, programa o taller.";
         res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
       }
 

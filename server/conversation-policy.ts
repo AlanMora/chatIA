@@ -32,7 +32,7 @@ type ServiceOption = {
 };
 
 const SECTION_KEYWORDS =
-  /\b(requisitos?|costos?|cuanto|cu[aá]nto|horario|vigencia|convocatoria|lugar|donde queda|d[oó]nde queda|direccion|direcci[oó]n|telefono|tel[eé]fono|contacto|en que consiste|a quien va dirigido)\b/i;
+  /\b(requisitos?|costos?|cuanto|cu[aá]nto|horario|vigencia|convocatoria|lugar|donde queda|d[oó]nde queda|direccion|direcci[oó]n|telefono|tel[eé]fono|contacto|en que consiste|en qu[eé] consiste|a quien va dirigido|a qui[eé]n va dirigido|pasos?|procedimiento|proceso|como lo hago|c[oó]mo lo hago|que sigue|qu[eé] sigue)\b/i;
 
 const COMPLETE_RECORD_KEYWORDS =
   /\b(ficha completa|todos los datos|toda la informacion|toda la informaci[oó]n|detalle completo|proceso completo)\b/i;
@@ -65,8 +65,8 @@ const COMPLEMENTARY_KEYWORDS =
   /\b(que es el dif|qu[eé] es el dif|que hace el dif|qu[eé] hace el dif|como funciona|c[oó]mo funciona|base de conocimiento|servicios publicos|servicios p[uú]blicos|informacion general|informaci[oó]n general)\b/i;
 
 const SECTION_BY_NUMBER: Record<number, string> = {
-  1: "En que consiste",
-  2: "A quien va dirigido",
+  1: "En qué consiste",
+  2: "A quién va dirigido",
   3: "Requisitos",
   4: "Costos",
   5: "Horario, vigencia o convocatoria",
@@ -108,88 +108,87 @@ ${cleanDescription ? `En breve: ${cleanDescription}` : "Te acompaño con este se
 8. Ficha completa
 
 Puedes escribir el número o el apartado. También puedes pedir "ficha completa".
-
-Si no sabes por dónde empezar, te sugiero revisar primero "En qué consiste" o "Requisitos".`;
+`;
 }
 
 export function buildAmbiguousHelpResponse(): string {
-  return `Para orientarte mejor, dime que necesitas o elige una opcion:
+  return `Para orientarte mejor, dime qué necesitas o elige una opción:
 
-1. Buscar un tramite o servicio
+1. Buscar un trámite o servicio
 2. Ver programas o talleres
-3. Ver servicios por grupo de atencion
-4. Hablar con una persona o pedir canal de atencion
+3. Ver servicios por grupo de atención
+4. Hablar con una persona o pedir canal de atención
 
 Si ya tienes un tema, puedes escribirlo directamente.`;
 }
 
 export function buildComplementaryInfoResponse(): string {
-  return `Puedo darte orientacion general sobre el DIF Zapopan, pero para evitar datos incorrectos necesito relacionarlo con un tramite, servicio, programa, taller o apoyo disponible.
+  return `Puedo darte orientación general sobre el DIF Zapopan, pero para evitar datos incorrectos necesito relacionarlo con un trámite, servicio, programa, taller o apoyo disponible.
 
 Puedes preguntarme, por ejemplo:
 
-1. Que servicios hay para personas mayores
-2. Que apoyos alimentarios existen
-3. Que talleres hay
-4. Buscar un tramite especifico`;
+1. Qué servicios hay para personas mayores
+2. Qué apoyos alimentarios existen
+3. Qué talleres hay
+4. Buscar un trámite específico`;
 }
 
 export function buildOutOfScopeResponse(): string {
-  return `Solo puedo orientar sobre tramites, servicios, programas, talleres y apoyos del DIF Zapopan.
+  return `Solo puedo orientar sobre trámites, servicios, programas, talleres y apoyos del DIF Zapopan.
 
 Para ese tema, consulta el portal o dependencia oficial correspondiente.
 
-Si tu consulta esta relacionada con DIF Zapopan, dime el tramite, servicio, programa o grupo de atencion que quieres revisar.`;
+Si tu consulta está relacionada con DIF Zapopan, dime el trámite, servicio, programa o grupo de atención que quieres revisar.`;
 }
 
 export function buildEmergencyResponse(): string {
   return `Si hay peligro inmediato o una emergencia, llama al 911 ahora.
 
-Yo puedo orientar sobre servicios del DIF Zapopan, pero no sustituyo atencion de emergencia ni intervencion de una autoridad.
+Yo puedo orientar sobre servicios del DIF Zapopan, pero no sustituyo atención de emergencia ni intervención de una autoridad.
 
-Cuando la situacion este segura, puedo ayudarte a buscar servicios relacionados con atencion, reportes, apoyo o canalizacion.`;
+Cuando la situación esté segura, puedo ayudarte a buscar servicios relacionados con atención, reportes, apoyo o canalización.`;
 }
 
 export function buildSafetyRiskResponse(): string {
-  return `Lamento la situacion. Si hay riesgo inmediato para una nina, nino, adolescente, persona adulta mayor o cualquier persona, llama al 911.
+  return `Lamento la situación. Si hay riesgo inmediato para una niña, niño, adolescente, persona adulta mayor o cualquier persona, llama al 911.
 
-Tambien puedo orientarte con servicios de reporte y atencion del DIF Zapopan relacionados con maltrato, abandono, violencia o situacion de vulnerabilidad.
+También puedo orientarte con servicios de reporte y atención del DIF Zapopan relacionados con maltrato, abandono, violencia o situación de vulnerabilidad.
 
 Para ayudarte mejor, dime si se trata de:
 
-1. Ninas, ninos o adolescentes
+1. Niñas, niños o adolescentes
 2. Personas adultas mayores
 3. Violencia familiar
-4. Otra situacion de riesgo`;
+4. Otra situación de riesgo`;
 }
 
 export function buildHumanHandoffResponse(): string {
   return `Puedo ayudarte a ubicar el servicio correcto antes de canalizarte.
 
-Para atencion con una persona, indica el tema principal:
+Para atención con una persona, indica el tema principal:
 
 1. Adultos mayores
-2. Ninas, ninos y adolescentes
+2. Niñas, niños y adolescentes
 3. Ayuda alimentaria
 4. Talleres o programas
-5. Reporte o situacion vulnerable
+5. Reporte o situación vulnerable
 
 Si ya sabes el servicio, escribe su nombre y te muestro lugar y contacto disponibles en la base de conocimiento.`;
 }
 
 export function isInitialWelcomeMenu(content: string): boolean {
-  return /buscar un tramite o servicio/i.test(content) &&
-    /no se que necesito/i.test(content) &&
-    /ver por grupo de atencion/i.test(content) &&
+  return /buscar un tr[aá]mite o servicio/i.test(content) &&
+    /no s[eé] que necesito|no s[eé] qué necesito/i.test(content) &&
+    /ver por grupo de atenci[oó]n/i.test(content) &&
     /ver programas o talleres/i.test(content);
 }
 
 export function buildInitialMenuOptionResponse(option: number): string | null {
   if (option === 1) {
-    return `Escribe el nombre del tramite, servicio, programa, taller o apoyo que buscas.
+    return `Escribe el nombre del trámite, servicio, programa, taller o apoyo que buscas.
 
 Ejemplos:
-1. Platicas prematrimoniales
+1. Pláticas prematrimoniales
 2. INAPAM
 3. Ayuda alimentaria
 4. Talleres deportivos`;
@@ -200,14 +199,14 @@ Ejemplos:
   }
 
   if (option === 3) {
-    return `Puedo ayudarte por grupo de atencion. Escribe el numero o el grupo que quieres revisar:
+    return `Puedo ayudarte por grupo de atención. Escribe el número o el grupo que quieres revisar:
 
 1. Personas mayores
-2. Ninas, ninos y adolescentes
+2. Niñas, niños y adolescentes
 3. Personas con discapacidad
 4. Familias
 5. Mujeres
-6. Personas en situacion vulnerable`;
+6. Personas en situación vulnerable`;
   }
 
   if (option === 4) {
@@ -238,14 +237,14 @@ function isLikelyServiceHeading(line: string): boolean {
 
 export function extractServiceOptionsWithDescriptionsFromList(content: string): ServiceOption[] {
   const isServiceSelectionPrompt =
-    /cual(?:es)? de estos servicios|cual quieres consultar|escribir el numero o el nombre|opciones relacionadas/i.test(content);
+    /cu[aá]l(?:es)? de estos servicios|cu[aá]l quieres consultar|escribir el n[uú]mero o el nombre|opciones relacionadas/i.test(content);
   const isSectionMenu =
-    /que informacion quieres conocer|ficha completa|en que consiste/i.test(content) &&
+    /qu[eé] informacion quieres conocer|qu[eé] información quieres conocer|ficha completa|en que consiste|en qué consiste/i.test(content) &&
     /requisitos|costos|lugar y contacto/i.test(content);
 
   if (isSectionMenu) return [];
 
-  const ignoredLine = /^[¿?]?(servicios ofrecidos|encontre estas opciones|cual|puedes escribir|escribe el numero|centro de estancias)/i;
+  const ignoredLine = /^[¿?]?(servicios ofrecidos|encontr[eé] estas opciones|cu[aá]l|puedes escribir|escribe el n[uú]mero|centro de estancias)/i;
   const rawLines = content
     .split(/\r?\n/)
     .map(normalizeServiceLine)
@@ -502,27 +501,27 @@ export function buildRuntimeSystemPrompt(systemPrompt: string | null | undefined
 
 === POLITICA RUNTIME DE CONVERSACION ===
 Estas reglas son obligatorias y tienen prioridad sobre los fragmentos RAG:
-1. Si la intencion es LISTADO, responde solo nombres de servicios y pregunta cual quiere consultar.
-2. Si la intencion es SELECCION DE SERVICIO o SERVICIO DIRECTO, responde con: nombre del servicio sin corchetes, una descripcion breve tomada de los fragmentos, y despues el menu de apartados.
-3. Si la intencion es APARTADO, responde solo ese apartado.
-4. Si la intencion es FICHA COMPLETA, entrega todos los apartados.
-5. Nunca conviertas una seleccion de servicio en ficha completa.
-6. Nunca inventes datos faltantes; usa "No encontre ese dato en la informacion disponible."
-7. Si la consulta es ambigua, pide una aclaracion breve y ofrece opciones.
-8. Si la consulta esta fuera de DIF Zapopan, dilo con claridad y redirige al portal o dependencia oficial correspondiente.
-9. Si el usuario describe violencia, maltrato, golpes, abuso, abandono, riesgo o emergencia, activa protocolo prioritario: indica llamar al 911 si hay riesgo inmediato y despues orienta a servicios de reporte o atencion del DIF Zapopan.
-10. Si el usuario pide hablar con una persona, ayuda a ubicar el tema o servicio y ofrece pedir lugar/contacto si esta en la base de conocimiento.
-11. Para informacion complementaria relacionada con DIF, responde en general solo si no inventas datos; despues pide que el usuario elija tramite, servicio, programa, taller o apoyo.
-12. Cuando el usuario conteste con un numero desde el menu de apartados: 1=En que consiste, 2=A quien va dirigido, 3=Requisitos, 4=Costos, 5=Horario/vigencia/convocatoria, 6=Lugar y contacto, 7=Nota importante, 8=Ficha completa.
+1. Si la intención es LISTADO, responde solo nombres de servicios y pregunta cuál quiere consultar.
+2. Si la intención es SELECCIÓN DE SERVICIO o SERVICIO DIRECTO, responde con: nombre del servicio sin corchetes, una descripción breve tomada de los fragmentos, y después el menú de apartados.
+3. Si la intención es APARTADO, responde solo ese apartado en máximo 5 viñetas breves.
+4. Si la intención es FICHA COMPLETA, entrega todos los apartados, pero resume cada apartado en máximo 3 viñetas breves.
+5. Nunca conviertas una selección de servicio en ficha completa.
+6. Nunca inventes datos faltantes; usa "No encontré ese dato en la información disponible."
+7. Si la consulta es ambigua, pide una aclaración breve y ofrece opciones.
+8. Si la consulta está fuera de DIF Zapopan, dilo con claridad y redirige al portal o dependencia oficial correspondiente.
+9. Si el usuario describe violencia, maltrato, golpes, abuso, abandono, riesgo o emergencia, activa protocolo prioritario: indica llamar al 911 si hay riesgo inmediato y después orienta a servicios de reporte o atención del DIF Zapopan.
+10. Si el usuario pide hablar con una persona, ayuda a ubicar el tema o servicio y ofrece pedir lugar/contacto si está en la base de conocimiento.
+11. Para información complementaria relacionada con DIF, responde en general solo si no inventas datos; después pide que el usuario elija trámite, servicio, programa, taller o apoyo.
+12. Cuando el usuario conteste con un número desde el menú de apartados: 1=En qué consiste, 2=A quién va dirigido, 3=Requisitos, 4=Costos, 5=Horario/vigencia/convocatoria, 6=Lugar y contacto, 7=Nota importante, 8=Ficha completa.
 13. Formato obligatorio para servicio seleccionado:
 [Nombre del servicio]
 
-En breve: [una sola frase breve sobre de que trata el servicio, usando solo los fragmentos disponibles. Si no hay descripcion, escribe: Puedo mostrarte la informacion por partes para que sea mas facil revisarla.]
+En breve: [una sola frase breve sobre de qué trata el servicio, usando solo los fragmentos disponibles. Si no hay descripción, escribe: Puedo mostrarte la información por partes para que sea más fácil revisarla.]
 
-Que informacion quieres conocer?
+¿Qué información quieres conocer?
 
-1. En que consiste
-2. A quien va dirigido
+1. En qué consiste
+2. A quién va dirigido
 3. Requisitos
 4. Costos
 5. Horario, vigencia o convocatoria
@@ -530,13 +529,15 @@ Que informacion quieres conocer?
 7. Nota importante
 8. Ficha completa
 
-Puedes escribir el numero o el apartado. Tambien puedes pedir "ficha completa".
+Puedes escribir el número o el apartado. También puedes pedir "ficha completa".
 14. Nunca pongas el nombre del servicio entre corchetes en la respuesta final.
-15. Cuando ya haya un servicio activo y el usuario pregunte por "ese servicio", costo, requisitos, documentacion, ubicacion, horario, telefono, contacto o ficha completa, responde usando exclusivamente la informacion del servicio activo. No mezcles informacion de otros servicios.
-16. Si un campo solicitado no aparece en la informacion recuperada, di que no esta especificado. No sugieras documentos, costos, horarios, telefonos ni ubicaciones no recuperadas.
-17. Para preguntas de ubicacion o contacto, prioriza direccion, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
+15. Cuando ya haya un servicio activo y el usuario pregunte por "ese servicio", costo, requisitos, documentación, ubicación, horario, teléfono, contacto o ficha completa, responde usando exclusivamente la información del servicio activo. No mezcles información de otros servicios.
+16. Si un campo solicitado no aparece en la información recuperada, di que no está especificado. No sugieras documentos, costos, horarios, teléfonos ni ubicaciones no recuperadas.
+17. Para preguntas de ubicación o contacto, prioriza dirección, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
 18. En trámites y servicios, solo ofrece o desarrolla registros activos/vigentes. Si un trámite o servicio no aparece como activo en la información recuperada, responde que no encontraste ese trámite o servicio activo en la información disponible.
 19. Usa ortografía institucional con acentos: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño". No escribas "Encontre", "Cual", "Que informacion" ni "acompanó/acompaño" sin tilde.
+20. Si el usuario pide pasos, proceso, procedimiento o "qué sigue", responde esos pasos solo si aparecen explícitamente como pasos/procedimiento en los fragmentos. Si no aparecen, responde: "No encontré pasos especificados en la información disponible." No conviertas requisitos, ubicación u horarios en pasos.
+21. Evita respuestas largas. Para celular, prioriza frases cortas, viñetas breves y solo el dato solicitado.
 === FIN POLITICA RUNTIME ===
 
 ${knowledgeContext}`;

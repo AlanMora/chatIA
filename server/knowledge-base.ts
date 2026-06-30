@@ -499,26 +499,26 @@ export async function buildKnowledgeContext(
 === REGLAS DE RESPUESTA ===
 1. Usa la informacion de los fragmentos de abajo, pero respeta primero el flujo conversacional del system prompt.
 2. Si el usuario pide un listado, una categoria o pregunta "que servicios hay", responde SOLO con nombres de servicios. No incluyas "en que consiste", requisitos, costos, lugares, telefonos ni descripcion.
-3. Si el usuario selecciona un servicio o escribe directamente el nombre de un servicio, muestra el nombre, una descripcion breve basada en los fragmentos y despues el menu de apartados.
-4. Si el usuario pide un apartado especifico, responde SOLO ese apartado.
-5. Solo entrega todos los apartados si el usuario pide "ficha completa", "todos los datos" o "toda la informacion".
+ 3. Si el usuario selecciona un servicio o escribe directamente el nombre de un servicio, muestra el nombre, una descripcion breve basada en los fragmentos y despues el menu de apartados.
+ 4. Si el usuario pide un apartado especifico, responde SOLO ese apartado.
+ 5. Solo entrega todos los apartados si el usuario pide "ficha completa", "todos los datos" o "toda la informacion".
 6. NO menciones los nombres de los archivos ni pongas citas en tu respuesta final.
-7. Si la informacion no esta abajo, indica que no esta especificada en la informacion disponible.
-8. Mantén un tono profesional, breve y directo.
-9. Si la consulta es ambigua, pide una aclaracion y ofrece opciones breves.
-10. Si la consulta esta fuera de tramites, servicios, programas, talleres o apoyos del DIF Zapopan, redirige al portal o dependencia oficial correspondiente.
-11. Si el usuario describe violencia, maltrato, golpes, abuso, abandono, riesgo o emergencia, indica llamar al 911 si hay riesgo inmediato y orienta a servicios de reporte o atencion del DIF Zapopan.
+ 7. Si la informacion no esta abajo, indica que no esta especificada en la informacion disponible.
+ 8. Mantén un tono profesional, breve y directo. Para apartados usa maximo 5 viñetas breves; para ficha completa usa maximo 3 viñetas por apartado.
+ 9. Si la consulta es ambigua, pide una aclaración y ofrece opciones breves.
+ 10. Si la consulta está fuera de trámites, servicios, programas, talleres o apoyos del DIF Zapopan, redirige al portal o dependencia oficial correspondiente.
+ 11. Si el usuario describe violencia, maltrato, golpes, abuso, abandono, riesgo o emergencia, indica llamar al 911 si hay riesgo inmediato y orienta a servicios de reporte o atención del DIF Zapopan.
 12. Si el usuario pide hablar con una persona, ayuda a identificar el tema y ofrece consultar lugar y contacto cuando exista en la base de conocimiento.
 13. Para servicio seleccionado usa exactamente este formato y no uses corchetes:
 [Nombre del servicio]
 
 En breve: [una frase breve sobre de que trata]
 
-Que informacion quieres conocer?
+ ¿Qué información quieres conocer?
 
-1. En que consiste
-2. A quien va dirigido
-3. Requisitos
+ 1. En qué consiste
+ 2. A quién va dirigido
+ 3. Requisitos
 4. Costos
 5. Horario, vigencia o convocatoria
 6. Lugar y contacto
@@ -527,10 +527,12 @@ Que informacion quieres conocer?
 
 14. Si hay servicio activo y el usuario pide costo, requisitos, documentacion, ubicacion, horario, telefono, contacto o ficha completa, usa solamente los fragmentos del servicio activo.
 15. No sugieras documentacion si no aparece explicitamente en los fragmentos.
-16. Si el usuario pregunta ubicacion o contacto, prioriza direccion, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
+ 16. Si el usuario pregunta ubicación o contacto, prioriza dirección, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
 17. Si aparece source_url en el fragmento, puedes mencionar "Fuente: [url]" al final de forma breve.
-18. No mezcles tramites/servicios con programas salvo que el usuario lo pida y ambos fragmentos indiquen relacion clara.
-19. Para tramites y servicios, solo responde con registros activos o vigentes. Si no hay fragmentos activos/vigentes del tramite o servicio solicitado, di que no encontraste ese tramite o servicio activo en la informacion disponible.
+ 18. No mezcles trámites/servicios con programas salvo que el usuario lo pida y ambos fragmentos indiquen relación clara.
+ 19. Para trámites y servicios, solo responde con registros activos o vigentes. Si no hay fragmentos activos/vigentes del trámite o servicio solicitado, di que no encontraste ese trámite o servicio activo en la información disponible.
+ 20. Si el usuario pide pasos, proceso, procedimiento o "qué sigue", responde esos pasos solo si aparecen explícitamente como pasos/procedimiento en los fragmentos. Si no aparecen, responde: "No encontré pasos especificados en la información disponible." No conviertas requisitos, ubicación u horarios en pasos.
+ 21. Usa ortografía institucional con acentos en la respuesta final: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño".
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}
