@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,7 +28,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ArrowLeft, Save, Eye, Upload, X, ImageIcon, Mic, Play, UserCheck, MessageSquare, Wrench } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, Save, Eye, Upload, X, ImageIcon, Mic, Play, UserCheck, MessageSquare, Wrench } from "lucide-react";
 import { Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -35,7 +36,7 @@ import { ChatWidget } from "@/components/chat-widget";
 import { ElevenLabsSettings } from "@/components/elevenlabs-settings";
 import { PredefinedResponses } from "@/components/predefined-responses";
 import { ELEVENLABS_VOICE_ENABLED } from "@/lib/features";
-import type { Chatbot } from "@shared/schema";
+import type { Chatbot, KnowledgeBaseItem } from "@shared/schema";
 
 const chatbotFormSchema = z.object({
   name: z.string().min(1, "El nombre es obligatorio").max(100),
@@ -56,6 +57,7 @@ const chatbotFormSchema = z.object({
   textColor: z.string(),
   position: z.string(),
   welcomeMessage: z.string().max(3000).optional(),
+  lifecycleStatus: z.enum(["draft", "testing", "production", "archived"]).optional(),
   temperature: z.string(),
   maxTokens: z.coerce.number().min(100).max(8192),
   isActive: z.boolean(),
@@ -188,6 +190,11 @@ export default function ChatbotEditor() {
     enabled: !isNew && !!chatbotId,
   });
 
+  const { data: knowledgeBaseItems } = useQuery<KnowledgeBaseItem[]>({
+    queryKey: ["/api/knowledge-base", chatbotId],
+    enabled: !isNew && !!chatbotId,
+  });
+
   const chatModels = modelCatalog?.filter((model) => model.type === "chat") || AI_MODELS.map((model) => ({
     id: model.value,
     label: model.label,
@@ -224,6 +231,7 @@ export default function ChatbotEditor() {
       textColor: "#FFFFFF",
       position: "bottom-right",
       welcomeMessage: DEFAULT_WELCOME_MESSAGE,
+      lifecycleStatus: "draft",
       temperature: "0.7",
       maxTokens: 1024,
       isActive: true,
@@ -251,6 +259,7 @@ export default function ChatbotEditor() {
       textColor: chatbot.textColor || "#FFFFFF",
       position: chatbot.position || "bottom-right",
       welcomeMessage: chatbot.welcomeMessage || DEFAULT_WELCOME_MESSAGE,
+      lifecycleStatus: ((chatbot as any).lifecycleStatus || "draft") as ChatbotFormValues["lifecycleStatus"],
       temperature: chatbot.temperature || "0.7",
       maxTokens: chatbot.maxTokens || 1024,
       isActive: chatbot.isActive ?? true,
@@ -412,6 +421,61 @@ export default function ChatbotEditor() {
   };
 
   const watchedValues = form.watch();
+  const knowledgeBaseCount = Array.isArray(knowledgeBaseItems) ? knowledgeBaseItems.length : 0;
+  const enabledSkillCount = capabilities?.enabledSkillIds.length || 0;
+  const lifecycleStatus = watchedValues.lifecycleStatus || "draft";
+  const lifecycleLabels: Record<string, string> = {
+    draft: "Borrador",
+    testing: "Pruebas",
+    production: "Producción",
+    archived: "Archivado",
+  };
+  const lifecycleBadgeVariant: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
+    draft: "outline",
+    testing: "secondary",
+    production: "default",
+    archived: "destructive",
+  };
+  const publicationChecks = [
+    {
+      label: "Identidad del agente",
+      description: "Nombre y descripción capturados.",
+      complete: Boolean(watchedValues.name?.trim() && watchedValues.description?.trim()),
+    },
+    {
+      label: "Mensaje de bienvenida",
+      description: "Primer mensaje visible definido para el widget.",
+      complete: Boolean(watchedValues.welcomeMessage?.trim()),
+    },
+    {
+      label: "Prompt del sistema",
+      description: "Instrucciones internas separadas del mensaje visible.",
+      complete: Boolean(watchedValues.systemPrompt?.trim()),
+    },
+    {
+      label: "Modelo configurado",
+      description: "Proveedor y modelo de chat seleccionados.",
+      complete: Boolean(watchedValues.aiProvider && watchedValues.aiModel),
+    },
+    {
+      label: "Base de conocimiento",
+      description: isNew ? "Disponible después de crear el agente." : `${knowledgeBaseCount} registro(s) asociados.`,
+      complete: isNew ? false : knowledgeBaseCount > 0,
+    },
+    {
+      label: "Capacidades",
+      description: isNew ? "Skills disponibles después de crear el agente." : `${enabledSkillCount} skill(s) habilitada(s).`,
+      complete: isNew ? false : enabledSkillCount > 0,
+    },
+    {
+      label: "Widget activo",
+      description: "Control técnico para permitir atención pública.",
+      complete: Boolean(watchedValues.isActive),
+    },
+  ];
+  const completedChecks = publicationChecks.filter((check) => check.complete).length;
+  const totalChecks = publicationChecks.length;
+  const publicationReady = completedChecks === totalChecks && lifecycleStatus === "production";
 
   const toggleSkill = (skillId: string) => {
     if (!capabilities || !chatbotId) return;
@@ -491,6 +555,7 @@ export default function ChatbotEditor() {
               <Tabs defaultValue="basic" className="w-full">
                 <TabsList className="w-full flex-wrap">
                   <TabsTrigger value="basic" className="flex-1" data-testid="tab-basic">Básico</TabsTrigger>
+                  <TabsTrigger value="welcome" className="flex-1" data-testid="tab-welcome">Bienvenida</TabsTrigger>
                   <TabsTrigger value="ai" className="flex-1" data-testid="tab-ai">IA</TabsTrigger>
                   <TabsTrigger value="appearance" className="flex-1" data-testid="tab-appearance">Apariencia</TabsTrigger>
                   <TabsTrigger value="leads" className="flex-1" data-testid="tab-leads">
@@ -558,28 +623,6 @@ export default function ChatbotEditor() {
 
                       <FormField
                         control={form.control}
-                        name="welcomeMessage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Mensaje de Bienvenida</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder={DEFAULT_WELCOME_MESSAGE}
-                                className="resize-none"
-                                {...field}
-                                data-testid="input-welcome"
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Primer mensaje que se muestra al abrir el chat. Maximo 3000 caracteres.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
                         name="isActive"
                         render={({ field }) => (
                           <FormItem className="flex items-center justify-between rounded-lg border p-4">
@@ -599,6 +642,118 @@ export default function ChatbotEditor() {
                           </FormItem>
                         )}
                       />
+
+                      <FormField
+                        control={form.control}
+                        name="lifecycleStatus"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Estado operativo</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || "draft"}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-lifecycle-status">
+                                  <SelectValue placeholder="Selecciona el estado" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="draft">Borrador</SelectItem>
+                                <SelectItem value="testing">Pruebas</SelectItem>
+                                <SelectItem value="production">Producción</SelectItem>
+                                <SelectItem value="archived">Archivado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              Estado administrativo del agente. El switch Activo controla si el widget atiende públicamente.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <ClipboardCheck className="h-5 w-5" />
+                            Checklist de publicación
+                          </CardTitle>
+                          <CardDescription>Revisión rápida antes de mover un agente a producción.</CardDescription>
+                        </div>
+                        <Badge variant={publicationReady ? "default" : "secondary"}>
+                          {completedChecks}/{totalChecks}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={lifecycleBadgeVariant[lifecycleStatus]}>
+                          {lifecycleLabels[lifecycleStatus]}
+                        </Badge>
+                        {publicationReady ? (
+                          <span className="text-sm text-muted-foreground">Listo para operación pública.</span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Completa los puntos pendientes antes de publicar.</span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {publicationChecks.map((check) => (
+                          <div key={check.label} className="flex items-start gap-3 rounded-md border p-3">
+                            {check.complete ? (
+                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                            ) : (
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium">{check.label}</div>
+                              <div className="text-xs text-muted-foreground">{check.description}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="welcome" className="mt-4 space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Mensaje de bienvenida</CardTitle>
+                      <CardDescription>
+                        Configura el primer mensaje visible del widget. Esto no modifica el prompt del sistema ni las reglas internas del agente.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="welcomeMessage"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Mensaje inicial del chat</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder={DEFAULT_WELCOME_MESSAGE}
+                                className="min-h-56 resize-y"
+                                {...field}
+                                data-testid="input-welcome"
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Se muestra antes de que la persona escriba. Úsalo para orientar, ofrecer opciones iniciales y definir el alcance visible.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="rounded-md border bg-muted/40 p-4">
+                        <div className="mb-2 text-sm font-medium">Vista rápida</div>
+                        <div className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-background p-3 text-sm text-foreground">
+                          {form.watch("welcomeMessage") || DEFAULT_WELCOME_MESSAGE}
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -1401,6 +1556,7 @@ export default function ChatbotEditor() {
                     textColor: watchedValues.textColor || "#FFFFFF",
                     position: watchedValues.position || "bottom-right",
                     welcomeMessage: watchedValues.welcomeMessage || DEFAULT_WELCOME_MESSAGE,
+                    lifecycleStatus: watchedValues.lifecycleStatus || "draft",
                     temperature: watchedValues.temperature || "0.7",
                     maxTokens: watchedValues.maxTokens || 1024,
                     isActive: watchedValues.isActive ?? true,

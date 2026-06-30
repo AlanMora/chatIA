@@ -70,6 +70,7 @@ async function main() {
         text_color: chatbot.textColor,
         position: chatbot.position,
         welcome_message: chatbot.welcomeMessage,
+        lifecycle_status: chatbot.lifecycleStatus,
         avatar_image: chatbot.avatarImage,
         temperature: chatbot.temperature,
         max_tokens: chatbot.maxTokens,

@@ -33,7 +33,8 @@
       "isActive": true,
       "elevenLabsAgentId": "",
       "requireLeadCapture": false,
-      "leadCaptureFields": "name,email"
+      "leadCaptureFields": "name,email",
+      "lifecycleStatus": "production"
     }
   ],
   "modelProviders": [

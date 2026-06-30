@@ -50,6 +50,7 @@ export const chatbots = pgTable("chatbots", {
   textColor: text("text_color").default("#FFFFFF"),
   position: text("position").default("bottom-right"),
   welcomeMessage: text("welcome_message").default("Hola, soy SofIA, asistente virtual del DIF Zapopan. Puedo orientarte sobre tramites, servicios, programas, talleres y apoyos disponibles. Escribe el tramite o servicio que buscas, pide un listado por tema o grupo de atencion, o selecciona un apartado como requisitos, costos, horarios, lugar y contacto."),
+  lifecycleStatus: text("lifecycle_status").default("draft"), // draft, testing, production, archived
   avatarImage: text("avatar_image"),
   // Behavior settings
   temperature: text("temperature").default("0.7"),
