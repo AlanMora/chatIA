@@ -1642,13 +1642,17 @@ export async function registerRoutes(
     isAuthenticated,
     uploadUatFiles.fields([
       { name: "conversationExport", maxCount: 1 },
+      { name: "uatWorkbooks", maxCount: 20 },
       { name: "uatWorkbook", maxCount: 1 },
     ]),
     async (req: any, res) => {
       try {
         const files = req.files as Record<string, Express.Multer.File[] | undefined>;
         const exportFile = files?.conversationExport?.[0];
-        const workbookFile = files?.uatWorkbook?.[0];
+        const workbookFiles = [
+          ...(files?.uatWorkbooks || []),
+          ...(files?.uatWorkbook || []),
+        ];
 
         if (!exportFile) {
           return res.status(400).json({ error: "Sube el JSON exportado con conversaciones." });
@@ -1656,7 +1660,7 @@ export async function registerRoutes(
 
         const savedFiles = {
           conversationExport: await persistUatFile(exportFile),
-          uatWorkbook: workbookFile ? await persistUatFile(workbookFile) : null,
+          uatWorkbooks: await Promise.all(workbookFiles.map((file) => persistUatFile(file))),
         };
 
         let exportData: any;
@@ -1675,11 +1679,16 @@ export async function registerRoutes(
               size: exportFile.size,
               storedPath: savedFiles.conversationExport,
             },
-            uatWorkbook: workbookFile
+            uatWorkbooks: workbookFiles.map((file, index) => ({
+              originalName: file.originalname,
+              size: file.size,
+              storedPath: savedFiles.uatWorkbooks[index],
+            })),
+            uatWorkbook: workbookFiles[0]
               ? {
-                  originalName: workbookFile.originalname,
-                  size: workbookFile.size,
-                  storedPath: savedFiles.uatWorkbook,
+                  originalName: workbookFiles[0].originalname,
+                  size: workbookFiles[0].size,
+                  storedPath: savedFiles.uatWorkbooks[0],
                 }
               : null,
           },

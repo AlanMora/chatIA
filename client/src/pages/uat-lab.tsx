@@ -21,6 +21,11 @@ interface UatAnalysisResult {
       size: number;
       storedPath: string | null;
     } | null;
+    uatWorkbooks?: Array<{
+      originalName: string;
+      size: number;
+      storedPath: string;
+    }>;
   };
   analysis: {
     exportedAt: string | null;
@@ -77,7 +82,7 @@ function labelForFlag(flag: string) {
 export default function UatLab() {
   const { toast } = useToast();
   const [conversationExport, setConversationExport] = useState<File | null>(null);
-  const [uatWorkbook, setUatWorkbook] = useState<File | null>(null);
+  const [uatWorkbooks, setUatWorkbooks] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [result, setResult] = useState<UatAnalysisResult | null>(null);
 
@@ -101,9 +106,7 @@ export default function UatLab() {
 
     const formData = new FormData();
     formData.append("conversationExport", conversationExport);
-    if (uatWorkbook) {
-      formData.append("uatWorkbook", uatWorkbook);
-    }
+    uatWorkbooks.forEach((file) => formData.append("uatWorkbooks", file));
 
     setIsUploading(true);
     try {
@@ -148,7 +151,7 @@ export default function UatLab() {
       <Card>
         <CardHeader>
           <CardTitle>Paquete de análisis</CardTitle>
-          <CardDescription>El JSON es obligatorio; el Excel UAT queda asociado como evidencia del ciclo de pruebas.</CardDescription>
+          <CardDescription>El JSON es obligatorio; puedes adjuntar varias bitácoras UAT como evidencia del ciclo de pruebas.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
           <div className="space-y-2">
@@ -176,10 +179,19 @@ export default function UatLab() {
               id="uat-workbook"
               type="file"
               accept=".xlsx,.xls,.csv"
-              onChange={(event) => setUatWorkbook(event.target.files?.[0] || null)}
+              multiple
+              onChange={(event) => setUatWorkbooks(Array.from(event.target.files || []))}
             />
-            {uatWorkbook && (
-              <p className="text-xs text-muted-foreground">{uatWorkbook.name} · {formatBytes(uatWorkbook.size)}</p>
+            {uatWorkbooks.length > 0 && (
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>{uatWorkbooks.length} archivo(s) seleccionado(s)</p>
+                {uatWorkbooks.slice(0, 4).map((file) => (
+                  <p key={`${file.name}-${file.size}`} className="truncate">
+                    {file.name} · {formatBytes(file.size)}
+                  </p>
+                ))}
+                {uatWorkbooks.length > 4 && <p>+{uatWorkbooks.length - 4} archivo(s) más</p>}
+              </div>
             )}
           </div>
 
