@@ -74,6 +74,34 @@ const uploadImage = multer({
   }
 });
 
+const uploadUatFiles = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const lowerName = file.originalname.toLowerCase();
+    const allowedMimeTypes = [
+      "application/json",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv",
+      "application/csv",
+    ];
+
+    if (
+      allowedMimeTypes.includes(file.mimetype) ||
+      lowerName.endsWith(".json") ||
+      lowerName.endsWith(".xlsx") ||
+      lowerName.endsWith(".xls") ||
+      lowerName.endsWith(".csv")
+    ) {
+      cb(null, true);
+      return;
+    }
+
+    cb(new Error("Tipo de archivo no válido. Sube JSON, XLSX, XLS o CSV."));
+  },
+});
+
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -215,10 +243,17 @@ Si quieres, dime tu colonia y te ayudo a identificar cuáles podrían quedarte m
 }
 
 const knowledgeUploadDir = path.resolve(process.cwd(), "uploads", "knowledge-base");
+const uatUploadDir = path.resolve(process.cwd(), "uploads", "uat-analysis");
 
 function ensureKnowledgeUploadDir() {
   if (!fs.existsSync(knowledgeUploadDir)) {
     fs.mkdirSync(knowledgeUploadDir, { recursive: true });
+  }
+}
+
+function ensureUatUploadDir() {
+  if (!fs.existsSync(uatUploadDir)) {
+    fs.mkdirSync(uatUploadDir, { recursive: true });
   }
 }
 
@@ -247,6 +282,14 @@ async function deleteStoredKnowledgeFile(item: { filePath?: string | null }) {
   await fs.promises.unlink(absolutePath).catch(() => {});
 }
 
+async function persistUatFile(file: Express.Multer.File) {
+  ensureUatUploadDir();
+  const filename = safeStoredFilename(file.originalname);
+  const filePath = path.join(uatUploadDir, filename);
+  await fs.promises.writeFile(filePath, file.buffer);
+  return path.relative(process.cwd(), filePath).replace(/\\/g, "/");
+}
+
 function sanitizeChatbot(chatbot: Chatbot) {
   const { customApiKey, openaiApiKey, geminiApiKey, ...safeChatbot } = chatbot;
   return {
@@ -254,6 +297,168 @@ function sanitizeChatbot(chatbot: Chatbot) {
     hasCustomApiKey: Boolean(customApiKey),
     hasOpenaiApiKey: Boolean(openaiApiKey),
     hasGeminiApiKey: Boolean(geminiApiKey),
+  };
+}
+
+type UatMessage = {
+  id?: number;
+  role?: string;
+  content?: string;
+  responseTimeMs?: number | null;
+  knowledgeStrategy?: string | null;
+  knowledgeSources?: string[] | null;
+  knowledgeChunks?: number | null;
+  createdAt?: string;
+};
+
+type UatConversationExport = {
+  conversation?: {
+    id?: number;
+    chatbotId?: number | null;
+    sessionId?: string;
+    createdAt?: string;
+  };
+  messages?: UatMessage[];
+  chatbotName?: string;
+};
+
+function parseExportedConversations(exportData: any): UatConversationExport[] {
+  if (Array.isArray(exportData)) {
+    return exportData;
+  }
+
+  if (!exportData || typeof exportData !== "object") {
+    return [];
+  }
+
+  if (Array.isArray(exportData.conversations)) {
+    return exportData.conversations;
+  }
+
+  if (!Array.isArray(exportData.chatbots)) {
+    return [];
+  }
+
+  return exportData.chatbots.flatMap((chatbot: any) =>
+    Array.isArray(chatbot.conversations) ? chatbot.conversations : [],
+  );
+}
+
+function analyzeUatExport(exportData: any) {
+  const conversations = parseExportedConversations(exportData);
+  const chatbots = Array.isArray(exportData?.chatbots) ? exportData.chatbots : [];
+  const assistantStrategies: Record<string, number> = {};
+  const issueFlags: Record<string, number> = {};
+  const topSources = new Map<string, number>();
+  const roleCounts: Record<string, number> = {};
+  const examples: any[] = [];
+  const dates: string[] = [];
+  let totalMessages = 0;
+
+  const issueMatchers: Array<[string, RegExp]> = [
+    ["sin_dato_o_no_encontrado", /no encontr[ée]|no encontre|no est[aá] especificad|no encontré ese tr[aá]mite/i],
+    ["terminos_internos", /chunk|metadata|base vectorial|retrieved_context|tool_result|many_services|no_context/i],
+    ["posible_invencion_pasos", /pasos generales|basados en informaci[oó]n disponible|acudir al DIF|iniciar tr[aá]mite/i],
+    ["formato_inconsistente", /Encontre|Cual quieres|Que informacion|tramite|Tambien/i],
+  ];
+
+  for (const item of conversations) {
+    const conversation = item.conversation || {};
+    const messages = Array.isArray(item.messages) ? item.messages : [];
+    if (conversation.createdAt) {
+      dates.push(conversation.createdAt);
+    }
+    totalMessages += messages.length;
+
+    messages.forEach((message, index) => {
+      const role = message.role || "desconocido";
+      roleCounts[role] = (roleCounts[role] || 0) + 1;
+
+      if (role !== "assistant") {
+        return;
+      }
+
+      const strategy = message.knowledgeStrategy || "sin_estrategia";
+      assistantStrategies[strategy] = (assistantStrategies[strategy] || 0) + 1;
+
+      for (const source of message.knowledgeSources || []) {
+        topSources.set(source, (topSources.get(source) || 0) + 1);
+      }
+
+      const content = message.content || "";
+      const flags: string[] = [];
+      if (content.length > 1200) {
+        flags.push("respuesta_larga");
+      }
+      if (message.knowledgeStrategy === "vector" && (message.knowledgeChunks || 0) === 0) {
+        flags.push("rag_sin_fragmentos");
+      }
+      for (const [flag, matcher] of issueMatchers) {
+        if (matcher.test(content)) {
+          flags.push(flag);
+        }
+      }
+
+      if (flags.length === 0) {
+        return;
+      }
+
+      for (const flag of flags) {
+        issueFlags[flag] = (issueFlags[flag] || 0) + 1;
+      }
+
+      if (examples.length < 12) {
+        const previousUser = [...messages.slice(0, index)]
+          .reverse()
+          .find((candidate) => candidate.role === "user");
+        examples.push({
+          conversationId: conversation.id,
+          createdAt: conversation.createdAt,
+          user: (previousUser?.content || "").slice(0, 220),
+          assistant: content.slice(0, 420),
+          flags,
+          strategy: message.knowledgeStrategy || null,
+          chunks: message.knowledgeChunks ?? null,
+          sources: (message.knowledgeSources || []).slice(0, 3),
+        });
+      }
+    });
+  }
+
+  const recommendations = [
+    issueFlags.sin_dato_o_no_encontrado
+      ? "Revisar consultas sin dato/no encontrado contra la base JSONL para distinguir vacíos reales de fallos de recuperación."
+      : null,
+    issueFlags.respuesta_larga
+      ? "Endurecer límites de brevedad en ficha completa y apartados; algunas respuestas superan el tamaño cómodo para celular."
+      : null,
+    issueFlags.posible_invencion_pasos
+      ? "Agregar una regla explícita para no inventar pasos operativos cuando el trámite no los trae como campo recuperado."
+      : null,
+    issueFlags.formato_inconsistente
+      ? "Normalizar acentos y texto institucional en respuestas determinísticas y runtime prompt."
+      : null,
+    "Cruzar estos ejemplos con la hoja Captura_UAT para priorizar correcciones según precisión, facilidad, confianza y observaciones humanas.",
+  ].filter(Boolean);
+
+  return {
+    exportedAt: exportData?.exportedAt || null,
+    chatbotNames: chatbots.map((chatbot: any) => chatbot.name).filter(Boolean),
+    knowledgeBaseItems: chatbots.reduce((count: number, chatbot: any) => {
+      return count + (Array.isArray(chatbot.knowledgeBase) ? chatbot.knowledgeBase.length : 0);
+    }, 0),
+    conversations: conversations.length,
+    messages: totalMessages,
+    roles: roleCounts,
+    dateRange: dates.length ? [dates.sort()[0], dates[dates.length - 1]] : [null, null],
+    assistantStrategies,
+    issueFlags,
+    topSources: Array.from(topSources.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([source, count]) => ({ source, count })),
+    examples,
+    recommendations,
   };
 }
 
@@ -1429,6 +1634,63 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to fetch metrics" });
     }
   });
+
+  // ==================== UAT Analysis API ====================
+
+  app.post(
+    "/api/uat/analyze",
+    isAuthenticated,
+    uploadUatFiles.fields([
+      { name: "conversationExport", maxCount: 1 },
+      { name: "uatWorkbook", maxCount: 1 },
+    ]),
+    async (req: any, res) => {
+      try {
+        const files = req.files as Record<string, Express.Multer.File[] | undefined>;
+        const exportFile = files?.conversationExport?.[0];
+        const workbookFile = files?.uatWorkbook?.[0];
+
+        if (!exportFile) {
+          return res.status(400).json({ error: "Sube el JSON exportado con conversaciones." });
+        }
+
+        const savedFiles = {
+          conversationExport: await persistUatFile(exportFile),
+          uatWorkbook: workbookFile ? await persistUatFile(workbookFile) : null,
+        };
+
+        let exportData: any;
+        try {
+          exportData = JSON.parse(exportFile.buffer.toString("utf8"));
+        } catch (error) {
+          return res.status(400).json({ error: "El archivo de conversaciones no es un JSON válido." });
+        }
+
+        const analysis = analyzeUatExport(exportData);
+
+        res.json({
+          files: {
+            conversationExport: {
+              originalName: exportFile.originalname,
+              size: exportFile.size,
+              storedPath: savedFiles.conversationExport,
+            },
+            uatWorkbook: workbookFile
+              ? {
+                  originalName: workbookFile.originalname,
+                  size: workbookFile.size,
+                  storedPath: savedFiles.uatWorkbook,
+                }
+              : null,
+          },
+          analysis,
+        });
+      } catch (error) {
+        console.error("Error analyzing UAT files:", error);
+        res.status(500).json({ error: "Failed to analyze UAT files" });
+      }
+    },
+  );
 
   // ==================== Ratings API ====================
 

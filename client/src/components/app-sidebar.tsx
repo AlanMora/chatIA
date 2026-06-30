@@ -5,6 +5,7 @@ import {
   BookOpen,
   Code2,
   BarChart3,
+  ClipboardCheck,
   Settings,
   MessageSquare,
   Mic,
@@ -48,6 +49,11 @@ const menuItems = [
     title: "Estadísticas",
     url: "/analytics",
     icon: BarChart3,
+  },
+  {
+    title: "Laboratorio UAT",
+    url: "/uat-lab",
+    icon: ClipboardCheck,
   },
   {
     title: "Voz IA",

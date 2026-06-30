@@ -20,6 +20,7 @@ import ChatbotEditor from "@/pages/chatbot-editor";
 import KnowledgeBase from "@/pages/knowledge-base";
 import EmbedPage from "@/pages/embed";
 import Analytics from "@/pages/analytics";
+import UatLab from "@/pages/uat-lab";
 import Settings from "@/pages/settings";
 import ChatbotPreview from "@/pages/chatbot-preview";
 import ChatbotTest from "@/pages/chatbot-test";
@@ -40,6 +41,7 @@ function Router() {
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/embed" component={EmbedPage} />
       <Route path="/analytics" component={Analytics} />
+      <Route path="/uat-lab" component={UatLab} />
       {ELEVENLABS_VOICE_ENABLED && (
         <Route path="/elevenlabs" component={ElevenLabsPage} />
       )}
