@@ -18,6 +18,8 @@ import { ChatWidget } from "@/components/chat-widget";
 import type { Chatbot } from "@shared/schema";
 import { useSearch } from "wouter";
 
+const WIDGET_EMBED_VERSION = "20260706-avatar-font";
+
 export default function EmbedPage() {
   const { toast } = useToast();
   const searchParams = useSearch();
@@ -35,7 +37,7 @@ export default function EmbedPage() {
   const selectedBot = chatbots?.find((c) => c.id.toString() === selectedChatbot);
 
   const embedCode = selectedChatbot
-    ? `<script src="${window.location.origin}/widget.js" data-chatbot-id="${selectedChatbot}"></script>`
+    ? `<script src="${window.location.origin}/widget.js?v=${WIDGET_EMBED_VERSION}" data-chatbot-id="${selectedChatbot}"></script>`
     : "";
 
   const handleCopy = async () => {
