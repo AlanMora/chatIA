@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/form";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, Save, Eye, Upload, X, ImageIcon, Mic, Play, UserCheck, MessageSquare, Wrench } from "lucide-react";
 import { Link } from "wouter";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ChatWidget } from "@/components/chat-widget";
 import { ElevenLabsSettings } from "@/components/elevenlabs-settings";
@@ -301,7 +301,9 @@ export default function ChatbotEditor() {
       formData.append('avatar', file);
       const response = await fetch(`/api/chatbots/${chatbotId}/avatar`, {
         method: 'POST',
+        headers: getAuthHeaders(),
         body: formData,
+        credentials: "include",
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -330,6 +332,8 @@ export default function ChatbotEditor() {
     mutationFn: async () => {
       const response = await fetch(`/api/chatbots/${chatbotId}/avatar`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
+        credentials: "include",
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
