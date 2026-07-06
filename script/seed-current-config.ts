@@ -71,7 +71,7 @@ async function main() {
         position: chatbot.position,
         welcome_message: chatbot.welcomeMessage,
         lifecycle_status: chatbot.lifecycleStatus,
-        avatar_image: chatbot.avatarImage,
+        avatar_image: chatbot.avatarImage ?? undefined,
         temperature: chatbot.temperature,
         max_tokens: chatbot.maxTokens,
         is_active: chatbot.isActive,
