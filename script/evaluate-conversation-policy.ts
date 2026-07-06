@@ -149,6 +149,12 @@ const intentCases: IntentCase[] = [
       { role: "user", content: "3" },
     ],
   },
+  {
+    name: "primer numero 3 sin bienvenida persistida es opcion inicial",
+    input: "3",
+    expected: "general_help",
+    messages: [{ role: "user", content: "3" }],
+  },
 ];
 
 const responseCases: ResponseCase[] = [
@@ -199,6 +205,12 @@ const responseCases: ResponseCase[] = [
     ],
     includes: ["grupo de atención", "Personas mayores", "Personas con discapacidad"],
     excludes: ["Requisitos", "Talleres deportivos"],
+  },
+  {
+    name: "primer numero 3 sin bienvenida persistida devuelve grupos",
+    messages: [{ role: "user", content: "3" }],
+    includes: ["grupo de atención", "Personas mayores", "Personas con discapacidad"],
+    excludes: ["Requisitos", "Talleres deportivos", "Alimentacion Escolar", "Alimentación Escolar"],
   },
   {
     name: "listado amplio no se intercepta como servicio directo",

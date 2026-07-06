@@ -223,6 +223,19 @@ Puedes escribir, por ejemplo:
   return null;
 }
 
+function isInitialNumericMenuSelection(
+  selectedNumber: number,
+  messages: ConversationMessage[] = [],
+): boolean {
+  if (selectedNumber < 1 || selectedNumber > 4) return false;
+
+  const hasAssistantMessage = messages.some((message) => message.role === "assistant");
+  if (hasAssistantMessage) return false;
+
+  const userMessages = messages.filter((message) => message.role === "user");
+  return userMessages.length <= 1;
+}
+
 function normalizeServiceLine(line: string): string {
   return line.trim().replace(/^\*+\s*/, "").replace(/\*+$/, "").replace(/^\d+[\).\-\s]+/, "").trim();
 }
@@ -409,6 +422,10 @@ export function classifyConversationIntent(
       .reverse()
       .find((message) => message.role === "assistant");
 
+    if (!previousAssistant && isInitialNumericMenuSelection(selectedNumber, messages)) {
+      return "general_help";
+    }
+
     if (previousAssistant && isInitialWelcomeMenu(previousAssistant.content)) {
       return "general_help";
     }
@@ -481,7 +498,9 @@ export function getDeterministicWidgetResponse(messages: ConversationMessage[]):
     .reverse()
     .find((message) => message.role === "assistant");
 
-  if (!previousAssistant) return null;
+  if (!previousAssistant) {
+    return buildInitialMenuOptionResponse(selectedNumber);
+  }
 
   if (isInitialWelcomeMenu(previousAssistant.content)) {
     return buildInitialMenuOptionResponse(selectedNumber);
