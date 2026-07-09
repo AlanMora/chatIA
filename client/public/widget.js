@@ -3,6 +3,9 @@
   
   const script = document.currentScript;
   const chatbotId = script.getAttribute('data-chatbot-id');
+  const shouldAutoOpen = script.getAttribute('data-auto-open') === 'true';
+  const openDelayMs = Math.max(0, parseInt(script.getAttribute('data-open-delay') || '0', 10) || 0);
+  const hideMobile = script.getAttribute('data-hide-mobile') === 'true';
   const ENABLE_ELEVENLABS_VOICE = false;
   
   if (!chatbotId) {
@@ -477,6 +480,14 @@
       margin-left: 8px;
       font-size: 11px;
     }
+    .chatbot-widget-privacy {
+      padding: 8px 12px;
+      border-top: 1px solid #e2e8f0;
+      background: #f8fafc;
+      color: #64748b;
+      font-size: var(--chatbot-widget-small);
+      line-height: 1.4;
+    }
     @media (max-width: 480px) {
       .chatbot-widget-container {
         width: 100%;
@@ -616,6 +627,10 @@
     });
   }
 
+  if (hideMobile && window.matchMedia && window.matchMedia('(max-width: 480px)').matches) {
+    return;
+  }
+
   function resolveAssetUrl(value) {
     if (!value) return '';
     try {
@@ -665,6 +680,12 @@
       }
       
       render();
+      if (shouldAutoOpen) {
+        setTimeout(function() {
+          isOpen = true;
+          render();
+        }, openDelayMs);
+      }
     } catch (error) {
       console.error('ChatBot Widget: Failed to load config', error);
     }
@@ -803,6 +824,7 @@
             <button class="chatbot-widget-rating-dismiss" id="chatbot-rating-dismiss">No, gracias</button>
           </div>
         ` : ''}
+        ${config.privacyNotice ? `<div class="chatbot-widget-privacy">${escapeHtml(config.privacyNotice)}</div>` : ''}
       </div>
     `;
     

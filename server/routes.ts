@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertChatbotSchema, insertKnowledgeBaseItemSchema, type Chatbot, type InsertKnowledgeBaseItem, type KnowledgeBaseItem } from "@shared/schema";
@@ -301,6 +301,53 @@ function sanitizeChatbot(chatbot: Chatbot) {
     hasOpenaiApiKey: Boolean(openaiApiKey),
     hasGeminiApiKey: Boolean(geminiApiKey),
   };
+}
+
+function parseAllowedDomains(value?: string | null): string[] {
+  return (value || "")
+    .split(/[\n,]+/)
+    .map((domain) => domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
+    .filter(Boolean);
+}
+
+function originHost(origin?: string): string | null {
+  if (!origin) return null;
+  try {
+    return new URL(origin).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function isOriginAllowedForChatbot(chatbot: Chatbot, origin?: string): boolean {
+  if (!origin) return true;
+  const allowedDomains = parseAllowedDomains(chatbot.allowedDomains);
+  if (allowedDomains.length === 0 || allowedDomains.includes("*")) return true;
+  const host = originHost(origin);
+  if (!host) return false;
+  return allowedDomains.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+const widgetRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function checkWidgetRateLimit(chatbot: Chatbot, req: Request): { ok: true } | { ok: false; retryAfter: number } {
+  const perMinute = Math.max(1, Number(chatbot.widgetRateLimitPerMinute || 20));
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const key = `${chatbot.id}:${ip}`;
+  const now = Date.now();
+  const current = widgetRateLimits.get(key);
+
+  if (!current || current.resetAt <= now) {
+    widgetRateLimits.set(key, { count: 1, resetAt: now + 60_000 });
+    return { ok: true };
+  }
+
+  if (current.count >= perMinute) {
+    return { ok: false, retryAfter: Math.ceil((current.resetAt - now) / 1000) };
+  }
+
+  current.count += 1;
+  return { ok: true };
 }
 
 type UatMessage = {
@@ -1720,6 +1767,14 @@ export async function registerRoutes(
       if (!chatbot || !chatbot.isActive) {
         return res.status(404).json({ error: "Chatbot not found" });
       }
+      if (!isOriginAllowedForChatbot(chatbot, req.get("origin"))) {
+        return res.status(403).json({ error: "Origin not allowed" });
+      }
+      const rateLimit = checkWidgetRateLimit(chatbot, req);
+      if (!rateLimit.ok) {
+        res.setHeader("Retry-After", `${rateLimit.retryAfter}`);
+        return res.status(429).json({ error: "Too many requests. Please try again later." });
+      }
       
       const conversation = await storage.getWidgetConversationBySession(chatbotId, sessionId);
       if (!conversation) {
@@ -1842,6 +1897,9 @@ export async function registerRoutes(
       if (!chatbot) {
         return res.status(404).json({ error: "Chatbot not found" });
       }
+      if (!isOriginAllowedForChatbot(chatbot, req.get("origin"))) {
+        return res.status(403).json({ error: "Origin not allowed" });
+      }
       if (!chatbot.isActive) {
         return res.status(403).json({ error: "Chatbot is not active" });
       }
@@ -1853,6 +1911,7 @@ export async function registerRoutes(
         position: chatbot.position,
         welcomeMessage: chatbot.welcomeMessage,
         avatarImage: chatbot.avatarImage,
+        privacyNotice: chatbot.widgetRequirePrivacyNotice ? chatbot.widgetPrivacyNotice : null,
         elevenLabsAgentId: ELEVENLABS_VOICE_ENABLED ? chatbot.elevenLabsAgentId : null,
       });
     } catch (error) {
@@ -1873,6 +1932,9 @@ export async function registerRoutes(
       
       if (!chatbot) {
         return res.status(404).json({ error: "Chatbot not found" });
+      }
+      if (!isOriginAllowedForChatbot(chatbot, req.get("origin"))) {
+        return res.status(403).json({ error: "Origin not allowed" });
       }
       
       if (!chatbot.elevenLabsAgentId) {
@@ -1921,8 +1983,19 @@ export async function registerRoutes(
       if (!chatbot) {
         return res.status(404).json({ error: "Chatbot not found" });
       }
+      if (!isOriginAllowedForChatbot(chatbot, req.get("origin"))) {
+        return res.status(403).json({ error: "Origin not allowed" });
+      }
       if (!chatbot.isActive) {
         return res.status(403).json({ error: "Chatbot is not active" });
+      }
+      if (String(message).length > (chatbot.widgetMaxMessageLength || 1200)) {
+        return res.status(400).json({ error: "Message is too long" });
+      }
+      const rateLimit = checkWidgetRateLimit(chatbot, req);
+      if (!rateLimit.ok) {
+        res.setHeader("Retry-After", `${rateLimit.retryAfter}`);
+        return res.status(429).json({ error: "Too many messages. Please try again later." });
       }
 
       // Get or create conversation
@@ -2440,6 +2513,14 @@ export async function registerRoutes(
       const chatbotId = parseInt(req.params.chatbotId);
       const sessionId = req.params.sessionId;
       const { visitorName, visitorEmail, visitorPhone, visitorCompany } = req.body;
+
+      const chatbot = await storage.getChatbot(chatbotId);
+      if (!chatbot || !chatbot.isActive) {
+        return res.status(404).json({ error: "Chatbot not found" });
+      }
+      if (!isOriginAllowedForChatbot(chatbot, req.get("origin"))) {
+        return res.status(403).json({ error: "Origin not allowed" });
+      }
       
       const conversation = await storage.getWidgetConversationBySession(chatbotId, sessionId);
       if (!conversation) {
@@ -2468,6 +2549,9 @@ export async function registerRoutes(
       
       if (!chatbot) {
         return res.status(404).json({ error: "Chatbot not found" });
+      }
+      if (!isOriginAllowedForChatbot(chatbot, req.get("origin"))) {
+        return res.status(403).json({ error: "Origin not allowed" });
       }
       
       res.json({

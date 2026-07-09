@@ -1568,6 +1568,12 @@ export default function ChatbotEditor() {
                     elevenLabsAgentId: watchedValues.elevenLabsAgentId || null,
                     requireLeadCapture: watchedValues.requireLeadCapture ?? false,
                     leadCaptureFields: watchedValues.leadCaptureFields || "name,email",
+                    allowedDomains: chatbot?.allowedDomains || "",
+                    widgetRateLimitPerMinute: chatbot?.widgetRateLimitPerMinute || 20,
+                    widgetMaxMessageLength: chatbot?.widgetMaxMessageLength || 1200,
+                    widgetRequirePrivacyNotice: chatbot?.widgetRequirePrivacyNotice ?? true,
+                    widgetPrivacyNotice: chatbot?.widgetPrivacyNotice || "Este asistente brinda orientación informativa. No compartas datos sensibles o de emergencia por este chat.",
+                    dataRetentionDays: chatbot?.dataRetentionDays || 180,
                     userId: chatbot?.userId || null,
                     createdAt: new Date(),
                   }}

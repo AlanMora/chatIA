@@ -61,6 +61,13 @@ export const chatbots = pgTable("chatbots", {
   // Lead capture form settings
   requireLeadCapture: boolean("require_lead_capture").default(false),
   leadCaptureFields: text("lead_capture_fields").default("name,email"), // comma-separated: name,email,phone,company
+  // Production security and governance settings
+  allowedDomains: text("allowed_domains").default(""),
+  widgetRateLimitPerMinute: integer("widget_rate_limit_per_minute").default(20),
+  widgetMaxMessageLength: integer("widget_max_message_length").default(1200),
+  widgetRequirePrivacyNotice: boolean("widget_require_privacy_notice").default(true),
+  widgetPrivacyNotice: text("widget_privacy_notice").default("Este asistente brinda orientación informativa. No compartas datos sensibles o de emergencia por este chat."),
+  dataRetentionDays: integer("data_retention_days").default(180),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

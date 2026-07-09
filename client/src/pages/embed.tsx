@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -12,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Code2, Copy, Check, Monitor, Tablet, Smartphone } from "lucide-react";
+import { Code2, Copy, Check, Monitor, Tablet, Smartphone, Globe, Blocks, Tag, LayoutTemplate } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ChatWidget } from "@/components/chat-widget";
 import type { Chatbot } from "@shared/schema";
@@ -29,6 +32,12 @@ export default function EmbedPage() {
   const [selectedChatbot, setSelectedChatbot] = useState<string>(preselectedChatbot || "");
   const [copied, setCopied] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [embedTemplate, setEmbedTemplate] = useState<"html" | "wordpress" | "elementor" | "gtm">("html");
+  const [embedOptions, setEmbedOptions] = useState({
+    autoOpen: false,
+    openDelay: 3000,
+    hideMobile: false,
+  });
 
   const { data: chatbots, isLoading } = useQuery<Chatbot[]>({
     queryKey: ["/api/chatbots"],
@@ -36,9 +45,49 @@ export default function EmbedPage() {
 
   const selectedBot = chatbots?.find((c) => c.id.toString() === selectedChatbot);
 
-  const embedCode = selectedChatbot
-    ? `<script src="${window.location.origin}/widget.js?v=${WIDGET_EMBED_VERSION}" data-chatbot-id="${selectedChatbot}"></script>`
+  const scriptAttributes = selectedChatbot
+    ? [
+        `src="${window.location.origin}/widget.js?v=${WIDGET_EMBED_VERSION}"`,
+        `data-chatbot-id="${selectedChatbot}"`,
+        embedOptions.autoOpen ? `data-auto-open="true"` : null,
+        embedOptions.autoOpen ? `data-open-delay="${embedOptions.openDelay}"` : null,
+        embedOptions.hideMobile ? `data-hide-mobile="true"` : null,
+      ].filter(Boolean).join(" ")
     : "";
+
+  const baseScript = selectedChatbot ? `<script ${scriptAttributes}></script>` : "";
+
+  const embedCode = selectedChatbot
+    ? {
+        html: `${baseScript}`,
+        wordpress: `<!-- WordPress: pega este bloque en Apariencia > Editor de archivos del tema antes de </body>, o en un plugin de headers/footers -->\n${baseScript}`,
+        elementor: `<!-- Elementor: agrega un widget HTML en la página o plantilla global y pega este código -->\n${baseScript}`,
+        gtm: `<!-- Google Tag Manager: crea una etiqueta Custom HTML y dispara en All Pages -->\n${baseScript}`,
+      }[embedTemplate]
+    : "";
+
+  const templateMeta = {
+    html: {
+      title: "Página Web / HTML",
+      description: "Para sitios propios, Laravel, React, HTML estático o plantillas normales.",
+      icon: Globe,
+    },
+    wordpress: {
+      title: "WordPress",
+      description: "Para plugins de headers/footers, tema hijo o bloque HTML global.",
+      icon: Blocks,
+    },
+    elementor: {
+      title: "Elementor",
+      description: "Para pegarlo en un widget HTML dentro de una página o plantilla.",
+      icon: LayoutTemplate,
+    },
+    gtm: {
+      title: "Google Tag Manager",
+      description: "Para publicarlo como etiqueta Custom HTML en todas las páginas.",
+      icon: Tag,
+    },
+  };
 
   const handleCopy = async () => {
     if (!embedCode) return;
@@ -109,13 +158,68 @@ export default function EmbedPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Code2 className="h-5 w-5" />
-                  Script de Inserción
+                  Plantillas de Inserción
                 </CardTitle>
                 <CardDescription>
-                  Copia este código y pégalo antes de la etiqueta &lt;/body&gt; de tu sitio web
+                  Elige la plataforma y copia el bloque listo para publicar
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {Object.entries(templateMeta).map(([key, item]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setEmbedTemplate(key as typeof embedTemplate)}
+                      className={`rounded-lg border p-3 text-left transition-colors hover:border-primary ${embedTemplate === key ? "border-primary bg-primary/5" : ""}`}
+                      data-testid={`button-template-${key}`}
+                    >
+                      <div className="flex items-center gap-2 font-medium">
+                        <item.icon className="h-4 w-4" />
+                        {item.title}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Label>Autoabrir</Label>
+                      <p className="text-xs text-muted-foreground">Abre el chat después de cargar.</p>
+                    </div>
+                    <Switch
+                      checked={embedOptions.autoOpen}
+                      onCheckedChange={(checked) => setEmbedOptions((current) => ({ ...current, autoOpen: checked }))}
+                      data-testid="switch-auto-open"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Demora (ms)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={500}
+                      value={embedOptions.openDelay}
+                      disabled={!embedOptions.autoOpen}
+                      onChange={(event) => setEmbedOptions((current) => ({ ...current, openDelay: Number(event.target.value) }))}
+                      data-testid="input-open-delay"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Label>Ocultar en móvil</Label>
+                      <p className="text-xs text-muted-foreground">No carga el widget en pantallas pequeñas.</p>
+                    </div>
+                    <Switch
+                      checked={embedOptions.hideMobile}
+                      onCheckedChange={(checked) => setEmbedOptions((current) => ({ ...current, hideMobile: checked }))}
+                      data-testid="switch-hide-mobile"
+                    />
+                  </div>
+                </div>
+
                 <div className="relative">
                   <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm font-mono">
                     <code>{embedCode}</code>

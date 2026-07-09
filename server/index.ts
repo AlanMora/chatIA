@@ -5,15 +5,53 @@ import { serveStatic } from "./static";
 import { initializeDatabase } from "./db";
 import { createServer } from "http";
 import cors from "cors";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
 
-// Enable CORS for widget endpoints (allows embedding on any website)
-app.use("/api/widget", cors({
-  origin: "*",
-  methods: ["GET", "POST", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
+function normalizeOriginHost(origin?: string) {
+  if (!origin) return null;
+  try {
+    return new URL(origin).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function parseAllowedDomains(value?: string | null) {
+  return (value || "")
+    .split(/[\n,]+/)
+    .map((domain) => domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
+    .filter(Boolean);
+}
+
+async function isWidgetOriginAllowed(req: Request, origin?: string) {
+  if (!origin) return true;
+  const chatbotId = Number.parseInt(req.path.split("/")[1] || "", 10);
+  if (!Number.isInteger(chatbotId)) return true;
+
+  const chatbot = await storage.getChatbot(chatbotId);
+  const allowedDomains = parseAllowedDomains(chatbot?.allowedDomains);
+  if (allowedDomains.length === 0 || allowedDomains.includes("*")) return true;
+
+  const originHost = normalizeOriginHost(origin);
+  if (!originHost) return false;
+
+  return allowedDomains.some((domain) => originHost === domain || originHost.endsWith(`.${domain}`));
+}
+
+// Enable CORS for widget endpoints with optional per-chatbot domain restrictions.
+app.use("/api/widget", cors((req, callback) => {
+  callback(null, {
+    origin: (origin, originCallback) => {
+      isWidgetOriginAllowed(req as Request, origin)
+        .then((allowed) => originCallback(allowed ? null : new Error("Origin not allowed"), allowed))
+        .catch(() => originCallback(new Error("Origin validation failed"), false));
+    },
+    methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  });
 }));
 
 declare module "http" {
