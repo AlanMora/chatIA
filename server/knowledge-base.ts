@@ -102,7 +102,7 @@ function getPreferredSkills(query: string): string[] {
     skills.push("ubicaciones_institucionales");
   }
 
-  if (/\b(telefono|numero|contacto|llamar|comunicar|comunicarme|directo|a donde llamo|donde llamo)\b/.test(normalized)) {
+  if (/\b(telefono|numero|llamar|comunicar|comunicarme|a donde llamo|donde llamo)\b/.test(normalized)) {
     skills.unshift("directorio_dif_zapopan");
   }
 
@@ -129,7 +129,7 @@ function expandFaqRetrievalQuery(query: string): string {
     expansions.push("Habilitecas talleres cursos ubicaciones oferta de cursos");
   }
 
-  if (/\b(telefono|numero|contacto|llamar|comunicar|comunicarme|directo|a donde llamo|donde llamo)\b/.test(normalized)) {
+  if (/\b(telefono|numero|llamar|comunicar|comunicarme|a donde llamo|donde llamo)\b/.test(normalized)) {
     expansions.push("Directorio Oficial DIF Zapopan telefono directo actualizado oficina contacto");
   }
 
