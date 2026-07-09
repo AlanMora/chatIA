@@ -579,7 +579,7 @@ export async function buildKnowledgeContext(
     );
     const entityChunks = filterChunksByQueryEntity(activeServiceChunks, retrievalQuery);
     const rankedChunks = rankChunksByPreferredSkills(entityChunks, retrievalState.preferredSkills);
-    const similarChunks = [...lexicalKnowledgeChunks, ...rankedChunks]
+    const similarChunks = rankedChunks
       .filter((chunk, index, chunks) => {
         const key = `${chunk.itemId}:${chunk.index}`;
         return chunks.findIndex((candidate) => `${candidate.itemId}:${candidate.index}` === key) === index;
