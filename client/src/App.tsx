@@ -40,6 +40,7 @@ function Router() {
       <Route path="/chatbots/:id" component={ChatbotEditor} />
       <Route path="/knowledge-base" component={KnowledgeBase} />
       <Route path="/embed" component={EmbedPage} />
+      <Route path="/security" component={Settings} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/uat-lab" component={UatLab} />
       {ELEVENLABS_VOICE_ENABLED && (

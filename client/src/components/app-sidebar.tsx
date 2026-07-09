@@ -7,6 +7,7 @@ import {
   BarChart3,
   ClipboardCheck,
   Settings,
+  Shield,
   MessageSquare,
   Mic,
 } from "lucide-react";
@@ -44,6 +45,11 @@ const menuItems = [
     title: "Código de Inserción",
     url: "/embed",
     icon: Code2,
+  },
+  {
+    title: "Seguridad",
+    url: "/security",
+    icon: Shield,
   },
   {
     title: "Estadísticas",
