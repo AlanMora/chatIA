@@ -15,7 +15,7 @@ type DirectoryIntent =
   | { type: "list"; category: "habilitecas" | "nidos" | "caic" | "nidos_caic" };
 
 const CONTACT_KEYWORDS = /\b(tel[eé]fono|telefono|n[uú]mero|numero|contacto|llamar|llamo|comunicar|comunicarme|directo|a donde llamo|donde llamo)\b/i;
-const LIST_KEYWORDS = /\b(lista|listar|dame|cu[aá]les|cuales|qu[eé]\s+.+tienen|contactos? de|tel[eé]fonos? de|telefonos? de)\b/i;
+const LIST_KEYWORDS = /\b(lista|listar|dame\s+los|dame\s+las|cu[aá]les|cuales|aparecen|qu[eé]\s+.+tienen|contactos? de|tel[eé]fonos? de|telefonos? de)\b/i;
 
 export function normalizeDirectoryText(value: string): string {
   return value
@@ -72,16 +72,16 @@ function detectDirectoryIntent(message: string): DirectoryIntent {
   const normalized = normalizeDirectoryText(message);
   const asksContact = CONTACT_KEYWORDS.test(message);
 
-  if ((LIST_KEYWORDS.test(message) || asksContact) && /\bhabilitecas?\b/.test(normalized)) {
+  if (LIST_KEYWORDS.test(message) && /\bhabilitecas?\b/.test(normalized)) {
     return { type: "list", category: "habilitecas" };
   }
-  if ((LIST_KEYWORDS.test(message) || asksContact) && /\bnidos?\b/.test(normalized) && /\bcaic\b/.test(normalized)) {
+  if (LIST_KEYWORDS.test(message) && /\bnidos?\b/.test(normalized) && /\bcaic\b/.test(normalized)) {
     return { type: "list", category: "nidos_caic" };
   }
-  if ((LIST_KEYWORDS.test(message) || asksContact) && /\bnidos?\b/.test(normalized)) {
+  if (LIST_KEYWORDS.test(message) && /\bnidos?\b/.test(normalized)) {
     return { type: "list", category: "nidos" };
   }
-  if ((LIST_KEYWORDS.test(message) || asksContact) && /\bcaic\b/.test(normalized)) {
+  if (LIST_KEYWORDS.test(message) && /\bcaic\b/.test(normalized)) {
     return { type: "list", category: "caic" };
   }
 

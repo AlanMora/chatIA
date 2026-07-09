@@ -38,7 +38,7 @@ const cases: DirectoryEvalCase[] = [
   {
     name: "telefono habiliteca santa lucia",
     input: "Número de la Habiliteca Santa Lucia",
-    includes: ["Habiliteca", "Santa Lucía"],
+    includes: ["Habiliteca 06 Santa Lucía", "3319830717"],
     excludes: ["ext.", "colaborador"],
   },
   {
