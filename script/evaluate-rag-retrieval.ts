@@ -50,6 +50,24 @@ const simpleCases: RagCase[] = [
     sourceIncludes: ["ayuda-alimentaria", "alimentaria"],
   },
   {
+    name: "costo despensas con typo",
+    input: "cual es el costo de las despendas de alimentaria directa",
+    minChunks: 1,
+    sourceIncludes: ["ayuda-alimentaria", "alimentaria"],
+  },
+  {
+    name: "adopcion acogida natural",
+    input: "como es el proceso de adopcion o acogida",
+    minChunks: 1,
+    sourceIncludes: ["adopciones", "adoptiva", "acogida"],
+  },
+  {
+    name: "pension alimenticia natural",
+    input: "dame mas detalles sobre pension alimenticia",
+    minChunks: 1,
+    sourceIncludes: ["pension", "alimentos", "Procuraduria"],
+  },
+  {
     name: "talleres deportivos",
     input: "talleres deportivos",
     minChunks: 1,
@@ -250,6 +268,30 @@ const flowCases: FlowCase[] = [
         minChunks: 1,
         assistantFixture: "talleres deportivos\n\nRequisitos\nDato de prueba.",
         sourceIncludes: ["talleres-deportivos"],
+      },
+    ],
+  },
+  {
+    name: "Cambio de tema desde servicio activo a adopcion",
+    turns: [
+      {
+        user: "que servicios hay sobre ayuda alimentaria",
+        expectedIntent: "list",
+        minChunks: 1,
+        assistantFixture: alimentariaList,
+        sourceIncludes: ["alimentaria"],
+      },
+      {
+        user: "1",
+        expectedIntent: "service_selection",
+        deterministicIncludes: ["Programa de Ayuda Alimentaria Directa", "¿Qué información quieres conocer?"],
+        assistantFixture: ayudaMenu,
+      },
+      {
+        user: "como es el proceso de adopcion o acogida",
+        expectedIntent: "section_request",
+        minChunks: 1,
+        sourceIncludes: ["adopciones", "adoptiva", "acogida"],
       },
     ],
   },

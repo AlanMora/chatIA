@@ -16,6 +16,11 @@ const cases: FaqEvalCase[] = [
     sourceIncludes: ["FAQ-001", "adopciones", "acogida"],
   },
   {
+    name: "adopcion proceso natural",
+    input: "como es el proceso de adopcion o acogida",
+    sourceIncludes: ["FAQ-001", "adopciones", "acogida", "familia adoptiva"],
+  },
+  {
     name: "divorcio asesoría",
     input: "me quiero separar legalmente y necesito que alguien me oriente",
     sourceIncludes: ["FAQ-002", "divorcios"],
@@ -23,6 +28,11 @@ const cases: FaqEvalCase[] = [
   {
     name: "pension alimenticia",
     input: "el papa de mis hijos no me ayuda, donde veo lo de pension",
+    sourceIncludes: ["FAQ-003", "pension"],
+  },
+  {
+    name: "pension mas detalles",
+    input: "dame mas detalles de pension alimenticia",
     sourceIncludes: ["FAQ-003", "pension"],
   },
   {

@@ -102,11 +102,11 @@ function getPreferredSkills(query: string): string[] {
     skills.push("ubicaciones_institucionales");
   }
 
-  if (/\b(tramite|servicio|requisito|documentacion|documentos|costo|cuanto cuesta|constancia|solicitud|registro|cita)\b/.test(normalized)) {
+  if (/\b(tramite|servicio|requisito|documentacion|documentos|costo|cuanto cuesta|constancia|solicitud|registro|cita|adopcion|adoptar|pension|alimenticia|despensa|despenda)\b/.test(normalized)) {
     skills.push("tramites_servicios_dif_zapopan");
   }
 
-  if (/\b(programa|apoyo|beneficio|poblacion|personas mayores|adultos mayores|ninas|ninos|adolescentes|alimentario|taller)\b/.test(normalized)) {
+  if (/\b(programa|apoyo|beneficio|poblacion|personas mayores|adultos mayores|ninas|ninos|adolescentes|alimentario|alimentaria|despensa|despenda|taller)\b/.test(normalized)) {
     skills.push("programas_servicios_dif_zapopan");
   }
 
@@ -123,6 +123,23 @@ function expandFaqRetrievalQuery(query: string): string {
 
   if (/\b(curso|cursos|taller|talleres|clase|clases)\b/.test(normalized) && /\b(cerca|colonia|ubicacion|donde|inscribir|meterme)\b/.test(normalized)) {
     expansions.push("Habilitecas talleres cursos ubicaciones oferta de cursos");
+  }
+
+  if (/\b(despensa|despensas|despenda|despendas|alimentaria|alimentario|alimentos|comida|viveres|canasta)\b/.test(normalized)) {
+    expansions.push("Programa de Ayuda Alimentaria Directa despensas apoyo alimentario costo requisitos");
+    expansions.push("Programa de Atencion Alimentaria a Personas en Situacion de Vulnerabilidad despensas");
+  }
+
+  if (/\b(pension|manutencion|alimentos|alimenticia|papa de mis hijos|padre de mis hijos|no me ayuda)\b/.test(normalized)) {
+    expansions.push("pension alimenticia asesoria juridica Procuraduria Social alimentos");
+  }
+
+  if (/\b(adopcion|adoptar|adoptiva|adoptivo|acogida|familia temporal|familias de amor)\b/.test(normalized)) {
+    expansions.push("adopciones acogida familia adoptiva certificacion de familia adoptiva curso inicial");
+  }
+
+  if (/\b(madre soltera|mama soltera|madres solteras|discapacidad|persona con discapacidad|apoyo social|trabajo social)\b/.test(normalized)) {
+    expansions.push("Centro de Trabajo Social apoyos orientacion social personas con discapacidad madres solteras");
   }
 
   if (/\b(guarderia|guarderias|estancia|cuidado infantil|centro infantil|desarrollo infantil)\b/.test(normalized)) {
@@ -190,6 +207,10 @@ function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): Ret
   if (/\bcemam\b/.test(normalized)) entityTerms.push("cemam");
   if (/\bcaic\b/.test(normalized)) entityTerms.push("caic");
   if (/\bnido\b/.test(normalized)) entityTerms.push("nido");
+  if (/\b(despensa|despensas|despenda|despendas|alimentaria|alimentario|alimentos|viveres|canasta)\b/.test(normalized)) entityTerms.push("alimentaria");
+  if (/\b(pension|manutencion|alimenticia|papa de mis hijos|padre de mis hijos)\b/.test(normalized)) entityTerms.push("pension");
+  if (/\b(adopcion|adoptar|adoptiva|adoptivo|acogida|familias de amor)\b/.test(normalized)) entityTerms.push("adop");
+  if (/\b(madre soltera|mama soltera|madres solteras|apoyo social|trabajo social)\b/.test(normalized)) entityTerms.push("trabajo social");
   if (/\bservicio social\b|\bliberar\b|\bestudiante\b|\bescuela\b/.test(normalized)) entityTerms.push("servicio social");
   if (/\bvuelve a casa\b|\bextraviar\b|\bextraviarse\b|\bdesorient\b|\bqr\b|\bgeolocalizacion\b/.test(normalized)) entityTerms.push("vuelve a casa");
   if (/\bvoluntades\b|\btarjeta\b/.test(normalized)) entityTerms.push("voluntades");
@@ -204,11 +225,15 @@ function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): Ret
   return matched.length > 0 ? matched : chunks;
 }
 
-async function getLexicalFaqMatches(chatbotId: number, query: string): Promise<RetrievedChunk[]> {
+async function getLexicalKnowledgeMatches(chatbotId: number, query: string): Promise<RetrievedChunk[]> {
   const normalized = normalizeForMatch(query);
   const aliases: string[] = [];
 
   if (/\b(curso|cursos|taller|talleres|clase|clases)\b/.test(normalized) && /\b(cerca|colonia|ubicacion|donde|inscribir|meterme)\b/.test(normalized)) aliases.push("habilitecas");
+  if (/\b(despensa|despensas|despenda|despendas|alimentaria|alimentario|alimentos|comida|viveres|canasta)\b/.test(normalized)) aliases.push("ayuda alimentaria", "asistencia alimentaria", "alimentaria directa", "despensa");
+  if (/\b(pension|manutencion|alimenticia|papa de mis hijos|padre de mis hijos|no me ayuda)\b/.test(normalized)) aliases.push("pension alimenticia", "procuraduria social");
+  if (/\b(adopcion|adoptar|adoptiva|adoptivo|acogida|familia temporal|familias de amor)\b/.test(normalized)) aliases.push("adopciones", "familia adoptiva", "certificacion de familia adoptiva", "acogida");
+  if (/\b(madre soltera|mama soltera|madres solteras|discapacidad|persona con discapacidad|apoyo social|trabajo social)\b/.test(normalized)) aliases.push("trabajo social", "discapacidad", "apoyo social");
   if (/\b(guarderia|guarderias|estancia|cuidado infantil|centro infantil|desarrollo infantil)\b/.test(normalized)) aliases.push("nidos");
   if (/\b(prepa|preparatoria|bachillerato|estudiar|terminar|acabar)\b/.test(normalized)) aliases.push("preparatorias", "prepa abierta");
   if (/\b(voluntades|tarjeta)\b/.test(normalized)) aliases.push("tarjeta voluntades");
@@ -219,12 +244,11 @@ async function getLexicalFaqMatches(chatbotId: number, query: string): Promise<R
 
   const items = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
   return items
-    .filter((item) => item.skill === "faq_dif_zapopan")
     .filter((item) => {
       const haystack = normalizeForMatch(`${item.title} ${item.content} ${JSON.stringify(item.metadata || {})}`);
       return aliases.some((alias) => haystack.includes(normalizeForMatch(alias)));
     })
-    .slice(0, 4)
+    .slice(0, 6)
     .map((item, index) => ({
       id: -item.id,
       itemId: item.id,
@@ -544,8 +568,8 @@ export async function buildKnowledgeContext(
     const queryEmbedding = await generateEmbedding(retrievalQuery, chatbot);
     const chunkLimit = retrievalState.shouldPreferActiveService || retrievalState.preferredSkills.length > 0 ? 30 : 8;
     const retrievedChunks = await storage.searchSimilarChunks(chatbotId, queryEmbedding, chunkLimit);
-    const lexicalFaqChunks = await getLexicalFaqMatches(chatbotId, retrievalQuery);
-    const mergedChunks = [...lexicalFaqChunks, ...retrievedChunks].filter((chunk, index, chunks) => {
+    const lexicalKnowledgeChunks = await getLexicalKnowledgeMatches(chatbotId, retrievalQuery);
+    const mergedChunks = [...lexicalKnowledgeChunks, ...retrievedChunks].filter((chunk, index, chunks) => {
       const key = `${chunk.itemId}:${chunk.index}`;
       return chunks.findIndex((candidate) => `${candidate.itemId}:${candidate.index}` === key) === index;
     });
@@ -555,7 +579,7 @@ export async function buildKnowledgeContext(
     );
     const entityChunks = filterChunksByQueryEntity(activeServiceChunks, retrievalQuery);
     const rankedChunks = rankChunksByPreferredSkills(entityChunks, retrievalState.preferredSkills);
-    const similarChunks = [...lexicalFaqChunks, ...rankedChunks]
+    const similarChunks = [...lexicalKnowledgeChunks, ...rankedChunks]
       .filter((chunk, index, chunks) => {
         const key = `${chunk.itemId}:${chunk.index}`;
         return chunks.findIndex((candidate) => `${candidate.itemId}:${candidate.index}` === key) === index;

@@ -32,7 +32,7 @@ type ServiceOption = {
 };
 
 const SECTION_KEYWORDS =
-  /\b(requisitos?|costos?|cuanto|cu[aá]nto|horario|vigencia|convocatoria|lugar|donde queda|d[oó]nde queda|direccion|direcci[oó]n|telefono|tel[eé]fono|contacto|en que consiste|en qu[eé] consiste|a quien va dirigido|a qui[eé]n va dirigido|pasos?|procedimiento|proceso|como lo hago|c[oó]mo lo hago|que sigue|qu[eé] sigue)\b/i;
+  /\b(requisitos?|costos?|cuanto|cu[aá]nto|horario|vigencia|convocatoria|lugar|donde queda|d[oó]nde queda|direccion|direcci[oó]n|telefono|tel[eé]fono|contacto|en que consiste|en qu[eé] consiste|a quien va dirigido|a qui[eé]n va dirigido|detalles?|m[aá]s detalles?|ampliar|pasos?|procedimiento|proceso|como lo hago|c[oó]mo lo hago|que sigue|qu[eé] sigue)\b/i;
 
 const COMPLETE_RECORD_KEYWORDS =
   /\b(ficha completa|todos los datos|toda la informacion|toda la informaci[oó]n|detalle completo|proceso completo)\b/i;
@@ -41,7 +41,7 @@ const LIST_KEYWORDS =
   /\b(que servicios hay|qu[eé] servicios hay|cu[aá]les servicios|listado|tr[aá]mites y(?:\/o)? servicios|que apoyos|qu[eé] apoyos|servicios sobre|servicios del|servicios en|servicios para|ver programas|ver por grupo)\b/i;
 
 const DIRECT_SERVICE_MARKERS =
-  /\b(afiliaci[oó]n|pl[aá]ticas?|prematrimoniales?|programa|taller(?:es)?|solicitud|reporte|servicios? b[aá]sicos|servicio m[eé]dico|alimentaci[oó]n escolar|inapam)\b/i;
+  /\b(afiliaci[oó]n|pl[aá]ticas?|prematrimoniales?|programa|taller(?:es)?|solicitud|reporte|servicios? b[aá]sicos|servicio m[eé]dico|alimentaci[oó]n escolar|inapam|adopci[oó]n|adoptiva|acogida|despensas?|despendas?|alimentaria|pensi[oó]n|alimenticia|trabajo social)\b/i;
 
 const GREETING_KEYWORDS =
   /^(hola|buenos dias|buenas tardes|buenas noches|buen dia|hey|saludos)[!.?\s]*$/i;
@@ -86,7 +86,7 @@ function normalizeForIntent(value: string): string {
 
 export function mentionsSpecificServiceTopic(content: string): boolean {
   const normalized = normalizeForIntent(content);
-  return /\b(platicas prematrimoniales|prematrimoniales|inapam|cemam|kokone|autismo|talleres deportivos|ayuda alimentaria|carril rosa|testamento|habiliteca|caic|nido)\b/.test(normalized);
+  return /\b(platicas prematrimoniales|prematrimoniales|inapam|cemam|kokone|autismo|talleres deportivos|ayuda alimentaria|asistencia alimentaria|despensa|despenda|carril rosa|testamento|habiliteca|caic|nido|adopcion|adoptar|adoptiva|acogida|pension|alimenticia|trabajo social|discapacidad)\b/.test(normalized);
 }
 
 export function buildServiceSectionMenu(serviceName: string, description?: string): string {
