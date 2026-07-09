@@ -183,12 +183,16 @@ function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): Ret
   const entityTerms: string[] = [];
 
   if (/\bhabilitecas?\b/.test(normalized)) entityTerms.push("habiliteca");
+  if (/\bprepa\b|\bpreparatoria\b|\bbachillerato\b|\bacabar\b|\bterminar\b/.test(normalized)) entityTerms.push("prepa");
   if (/\bplaticas prematrimoniales\b|\bprematrimoniales\b/.test(normalized)) entityTerms.push("prematrimonial");
   if (/\bautismo\b/.test(normalized)) entityTerms.push("autismo");
   if (/\binapam\b/.test(normalized)) entityTerms.push("inapam");
   if (/\bcemam\b/.test(normalized)) entityTerms.push("cemam");
   if (/\bcaic\b/.test(normalized)) entityTerms.push("caic");
   if (/\bnido\b/.test(normalized)) entityTerms.push("nido");
+  if (/\bservicio social\b|\bliberar\b|\bestudiante\b|\bescuela\b/.test(normalized)) entityTerms.push("servicio social");
+  if (/\bvuelve a casa\b|\bextraviar\b|\bextraviarse\b|\bdesorient\b|\bqr\b|\bgeolocalizacion\b/.test(normalized)) entityTerms.push("vuelve a casa");
+  if (/\bvoluntades\b|\btarjeta\b/.test(normalized)) entityTerms.push("voluntades");
 
   if (entityTerms.length === 0) return chunks;
 
@@ -198,6 +202,44 @@ function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): Ret
   });
 
   return matched.length > 0 ? matched : chunks;
+}
+
+async function getLexicalFaqMatches(chatbotId: number, query: string): Promise<RetrievedChunk[]> {
+  const normalized = normalizeForMatch(query);
+  const aliases: string[] = [];
+
+  if (/\b(curso|cursos|taller|talleres|clase|clases)\b/.test(normalized) && /\b(cerca|colonia|ubicacion|donde|inscribir|meterme)\b/.test(normalized)) aliases.push("habilitecas");
+  if (/\b(guarderia|guarderias|estancia|cuidado infantil|centro infantil|desarrollo infantil)\b/.test(normalized)) aliases.push("nidos");
+  if (/\b(prepa|preparatoria|bachillerato|estudiar|terminar|acabar)\b/.test(normalized)) aliases.push("preparatorias", "prepa abierta");
+  if (/\b(voluntades|tarjeta)\b/.test(normalized)) aliases.push("tarjeta voluntades");
+  if (/\b(servicio social|practicas|liberar|estudiante|escuela)\b/.test(normalized)) aliases.push("servicio social");
+  if (/\b(extraviar|extraviarse|perderse|desorient|qr|geolocalizacion|geolocalizar|volver a casa|vuelve a casa)\b/.test(normalized)) aliases.push("vuelve a casa");
+
+  if (aliases.length === 0) return [];
+
+  const items = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
+  return items
+    .filter((item) => item.skill === "faq_dif_zapopan")
+    .filter((item) => {
+      const haystack = normalizeForMatch(`${item.title} ${item.content} ${JSON.stringify(item.metadata || {})}`);
+      return aliases.some((alias) => haystack.includes(normalizeForMatch(alias)));
+    })
+    .slice(0, 4)
+    .map((item, index) => ({
+      id: -item.id,
+      itemId: item.id,
+      chatbotId: item.chatbotId,
+      content: item.content,
+      embedding: [],
+      index,
+      createdAt: item.createdAt,
+      sourceTitle: item.title,
+      sourceUrl: item.sourceUrl,
+      skill: item.skill,
+      tipoDocumento: item.tipoDocumento,
+      categoria: item.categoria,
+      metadata: item.metadata,
+    }) as RetrievedChunk);
 }
 
 function sourceUrlFromChunk(chunk: RetrievedChunk): string | null {
@@ -502,8 +544,13 @@ export async function buildKnowledgeContext(
     const queryEmbedding = await generateEmbedding(retrievalQuery, chatbot);
     const chunkLimit = retrievalState.shouldPreferActiveService || retrievalState.preferredSkills.length > 0 ? 30 : 8;
     const retrievedChunks = await storage.searchSimilarChunks(chatbotId, queryEmbedding, chunkLimit);
+    const lexicalFaqChunks = await getLexicalFaqMatches(chatbotId, retrievalQuery);
+    const mergedChunks = [...lexicalFaqChunks, ...retrievedChunks].filter((chunk, index, chunks) => {
+      const key = `${chunk.itemId}:${chunk.index}`;
+      return chunks.findIndex((candidate) => `${candidate.itemId}:${candidate.index}` === key) === index;
+    });
     const activeServiceChunks = filterChunksByActiveService(
-      retrievedChunks,
+      mergedChunks,
       retrievalState.shouldPreferActiveService ? retrievalState.activeService : null,
     );
     const entityChunks = filterChunksByQueryEntity(activeServiceChunks, retrievalQuery);
