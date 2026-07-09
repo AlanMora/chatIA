@@ -65,7 +65,7 @@ const simpleCases: RagCase[] = [
     name: "pension alimenticia natural",
     input: "dame mas detalles sobre pension alimenticia",
     minChunks: 1,
-    sourceIncludes: ["pension", "alimentos", "Procuraduria"],
+    sourceIncludes: ["FAQ-003", "ORIENTACIÓN JURÍDICA", "asesoría jurídica"],
   },
   {
     name: "talleres deportivos",
