@@ -574,7 +574,7 @@ export default function KnowledgeBase() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx,.txt,.jsonl"
+                  accept=".pdf,.doc,.docx,.txt,.md,.markdown,.jsonl"
                   onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                   className="hidden"
                   data-testid="input-file"
@@ -582,7 +582,7 @@ export default function KnowledgeBase() {
                 <input
                   ref={batchFileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx,.txt,.jsonl"
+                  accept=".pdf,.doc,.docx,.txt,.md,.markdown,.jsonl"
                   multiple
                   onChange={(e) => {
                     const files = e.target.files;
@@ -609,7 +609,7 @@ export default function KnowledgeBase() {
                         <Upload className="h-6 w-6 text-muted-foreground" />
                         <p className="font-medium text-sm">Un archivo</p>
                         <p className="text-xs text-muted-foreground">
-                          PDF, DOC, DOCX, TXT, JSONL
+                          PDF, DOC, DOCX, TXT, MD, JSONL
                         </p>
                       </div>
                     )}

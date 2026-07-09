@@ -34,16 +34,18 @@ const uploadDocs = multer({
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/plain',
+      'text/markdown',
       'application/jsonl',
       'application/x-jsonl',
       'application/json-lines',
       'text/jsonl',
     ];
     const isJsonlExt = file.originalname.toLowerCase().endsWith('.jsonl');
-    if (allowedTypes.includes(file.mimetype) || isJsonlExt) {
+    const isMarkdownExt = /\.(md|markdown)$/i.test(file.originalname);
+    if (allowedTypes.includes(file.mimetype) || isJsonlExt || isMarkdownExt) {
       cb(null, true);
     } else {
-      cb(new Error('Tipo de archivo no válido. Solo se permiten PDF, DOC, DOCX, TXT y JSONL.'));
+      cb(new Error('Tipo de archivo no válido. Solo se permiten PDF, DOC, DOCX, TXT, MD y JSONL.'));
     }
   }
 });
@@ -1138,7 +1140,7 @@ export async function registerRoutes(
                file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const result = await mammoth.extractRawText({ buffer: file.buffer });
       return result.value || "";
-    } else if (file.mimetype === 'text/plain') {
+    } else if (file.mimetype === 'text/plain' || file.mimetype === 'text/markdown' || /\.(md|markdown)$/i.test(file.originalname)) {
       return file.buffer.toString('utf-8');
     }
     return "";

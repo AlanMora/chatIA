@@ -110,6 +110,10 @@ function getPreferredSkills(query: string): string[] {
     skills.push("programas_servicios_dif_zapopan");
   }
 
+  if (/\b(pregunta|duda|informacion|informes|quiero|necesito|tienen|hay|donde|como|cual|cuanto|telefono|registr|inscrib|cita|apunt)\b/.test(normalized)) {
+    skills.push("faq_dif_zapopan");
+  }
+
   return Array.from(new Set(skills));
 }
 
@@ -472,7 +476,7 @@ export async function buildKnowledgeContext(
       retrievalState.shouldPreferActiveService ? retrievalState.activeService : null,
     );
     const entityChunks = filterChunksByQueryEntity(activeServiceChunks, retrievalQuery);
-    const similarChunks = rankChunksByPreferredSkills(entityChunks, retrievalState.preferredSkills).slice(0, 5);
+    const similarChunks = rankChunksByPreferredSkills(entityChunks, retrievalState.preferredSkills).slice(0, 7);
 
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
@@ -533,6 +537,8 @@ En breve: [una frase breve sobre de que trata]
  19. Para trámites y servicios, solo responde con registros activos o vigentes. Si no hay fragmentos activos/vigentes del trámite o servicio solicitado, di que no encontraste ese trámite o servicio activo en la información disponible.
  20. Si el usuario pide pasos, proceso, procedimiento o "qué sigue", responde esos pasos solo si aparecen explícitamente como pasos/procedimiento en los fragmentos. Si no aparecen, responde: "No encontré pasos especificados en la información disponible." No conviertas requisitos, ubicación u horarios en pasos.
  21. Usa ortografía institucional con acentos en la respuesta final: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño".
+22. Si recuperas una pregunta frecuente y también trámites, servicios, programas o ubicaciones sobre el mismo tema, úsalos como información complementaria. Responde primero la intención del usuario con la FAQ cuando sea la fuente más directa, y complementa con requisitos, costos, horarios, ubicación, contacto o enlaces solo si el usuario lo pidió o si ayuda claramente a completar la orientación.
+23. No presentes FAQ y trámite/servicio como opciones contradictorias. Si ambos fragmentos coinciden en el tema, intégralos en una respuesta breve y coherente; si difieren en alcance o dependencia responsable, aclara esa diferencia.
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}
