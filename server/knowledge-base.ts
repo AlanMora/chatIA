@@ -200,9 +200,11 @@ function rankChunksByPreferredSkills(chunks: RetrievedChunk[], preferredSkills: 
 function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): RetrievedChunk[] {
   const normalized = normalizeForMatch(query);
   const entityTerms: string[] = [];
+  const asksPrepa = /\bprepa\b|\bpreparatoria\b|\bbachillerato\b|\bacabar\b|\bterminar\b/.test(normalized);
+  const asksPension = /\b(pension|manutencion|alimenticia|papa de mis hijos|padre de mis hijos)\b/.test(normalized);
 
-  if (/\bhabilitecas?\b/.test(normalized)) entityTerms.push("habiliteca");
-  if (/\bprepa\b|\bpreparatoria\b|\bbachillerato\b|\bacabar\b|\bterminar\b/.test(normalized)) entityTerms.push("prepa");
+  if (asksPrepa) entityTerms.push("prepa", "preparatoria", "bachillerato");
+  else if (/\bhabilitecas?\b/.test(normalized)) entityTerms.push("habiliteca");
   if (/\bplaticas prematrimoniales\b|\bprematrimoniales\b/.test(normalized)) entityTerms.push("prematrimonial");
   if (/\bautismo\b/.test(normalized)) entityTerms.push("autismo");
   if (/\binapam\b/.test(normalized)) entityTerms.push("inapam");
@@ -210,7 +212,7 @@ function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): Ret
   if (/\bcaic\b/.test(normalized)) entityTerms.push("caic");
   if (/\bnido\b/.test(normalized)) entityTerms.push("nido");
   if (/\b(despensa|despensas|despenda|despendas|alimentaria|alimentario|viveres|canasta)\b/.test(normalized)) entityTerms.push("alimentaria");
-  if (/\b(pension|manutencion|alimenticia|papa de mis hijos|padre de mis hijos)\b/.test(normalized)) entityTerms.push("pension", "asesoria juridica");
+  if (asksPension) entityTerms.push("pension", "asesoria juridica", "orientacion juridica", "procuraduria");
   if (/\b(adopcion|adoptar|adoptiva|adoptivo|acogida|familias de amor)\b/.test(normalized)) entityTerms.push("adop");
   if (/\b(certificado de discapacidad|certificado discapacidad|constancia de discapacidad)\b/.test(normalized)) entityTerms.push("discapacidad");
   if (/\b(madre soltera|mama soltera|madres solteras|apoyo social|trabajo social)\b/.test(normalized)) entityTerms.push("trabajo social");
@@ -224,6 +226,22 @@ function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): Ret
     const haystack = normalizeForMatch(`${chunk.sourceTitle} ${chunk.content} ${JSON.stringify(chunk.metadata || {})}`);
     return entityTerms.some((term) => haystack.includes(term));
   });
+
+  if (asksPension && matched.length > 0) {
+    const legalMatches = matched.filter((chunk) => {
+      const haystack = normalizeForMatch(`${chunk.sourceTitle} ${chunk.content} ${JSON.stringify(chunk.metadata || {})}`);
+      return /\b(pension|asesoria juridica|orientacion juridica|procuraduria)\b/.test(haystack);
+    });
+    return legalMatches.length > 0 ? legalMatches : matched;
+  }
+
+  if (asksPrepa && matched.length > 0) {
+    const prepaMatches = matched.filter((chunk) => {
+      const haystack = normalizeForMatch(`${chunk.sourceTitle} ${chunk.content} ${JSON.stringify(chunk.metadata || {})}`);
+      return /\b(prepa|preparatoria|preparatorias|bachillerato)\b/.test(haystack);
+    });
+    return prepaMatches.length > 0 ? prepaMatches : matched;
+  }
 
   return matched.length > 0 ? matched : chunks;
 }
