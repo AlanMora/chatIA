@@ -25,6 +25,7 @@ type SofiaJsonlRecord = {
 const DEFAULT_FILES = [
   "jsonl/integrar/99_sofia_kb_master_completo_depurado.jsonl",
   "jsonl/integrar/sofia_tramites_servicios_2026_06_12_173504.jsonl",
+  "jsonl/integrar/05_faq_dif_zapopan.canonical.jsonl",
 ];
 
 const EXPECTED_COUNTS_BY_BASENAME: Record<string, { total: number; skills: Record<string, number> }> = {
@@ -41,6 +42,12 @@ const EXPECTED_COUNTS_BY_BASENAME: Record<string, { total: number; skills: Recor
     total: 80,
     skills: {
       tramites_servicios_dif_zapopan: 80,
+    },
+  },
+  "05_faq_dif_zapopan.canonical.jsonl": {
+    total: 31,
+    skills: {
+      faq_dif_zapopan: 31,
     },
   },
 };

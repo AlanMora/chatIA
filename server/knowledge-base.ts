@@ -76,14 +76,14 @@ function getRetrievalState(messages: MessageLike[]): {
 
   if (activeService && shouldPreferActiveService) {
     return {
-      query: `${activeService} ${requestedSection || lastUserMessage}`,
+      query: expandFaqRetrievalQuery(`${activeService} ${requestedSection || lastUserMessage}`),
       activeService,
       shouldPreferActiveService,
       preferredSkills,
     };
   }
 
-  return { query: lastUserMessage, activeService, shouldPreferActiveService, preferredSkills };
+  return { query: expandFaqRetrievalQuery(lastUserMessage), activeService, shouldPreferActiveService, preferredSkills };
 }
 
 function getPreferredSkills(query: string): string[] {
@@ -115,6 +115,37 @@ function getPreferredSkills(query: string): string[] {
   }
 
   return Array.from(new Set(skills));
+}
+
+function expandFaqRetrievalQuery(query: string): string {
+  const normalized = normalizeForMatch(query);
+  const expansions: string[] = [];
+
+  if (/\b(curso|cursos|taller|talleres|clase|clases)\b/.test(normalized) && /\b(cerca|colonia|ubicacion|donde|inscribir|meterme)\b/.test(normalized)) {
+    expansions.push("Habilitecas talleres cursos ubicaciones oferta de cursos");
+  }
+
+  if (/\b(guarderia|guarderias|estancia|cuidado infantil|centro infantil|desarrollo infantil)\b/.test(normalized)) {
+    expansions.push("Nidos centros de desarrollo infantil guardería niñas niños");
+  }
+
+  if (/\b(prepa|preparatoria|bachillerato|estudiar|terminar|acabar)\b/.test(normalized)) {
+    expansions.push("Prepa Abierta preparatoria Habilitecas validez oficial costos");
+  }
+
+  if (/\b(voluntades|tarjeta)\b/.test(normalized)) {
+    expansions.push("Tarjeta Voluntades registro requisitos documentos Habiliteca");
+  }
+
+  if (/\b(servicio social|practicas|liberar|estudiante|escuela)\b/.test(normalized)) {
+    expansions.push("Servicio social Capital Humano requisitos oficio escuela");
+  }
+
+  if (/\b(extraviar|extraviarse|perderse|desorient|qr|geolocalizacion|geolocalizar|volver a casa|vuelve a casa)\b/.test(normalized)) {
+    expansions.push("Vuelve a Casa código QR geolocalización registro requisitos");
+  }
+
+  return expansions.length > 0 ? `${query}\n${expansions.join("\n")}` : query;
 }
 
 function filterChunksByActiveService(chunks: RetrievedChunk[], activeService: string | null): RetrievedChunk[] {

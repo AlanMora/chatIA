@@ -104,7 +104,7 @@ Ejemplo usado en integración JSONL:
 
 Solo ejecutar cuando se requiera reemplazar la base de conocimiento del chatbot.
 
-Este comando crea backup, purga la KB del `chatbotId=1` e importa master + trámites/servicios:
+Este comando crea backup, purga la KB del `chatbotId=1` e importa master + trámites/servicios + FAQ:
 
 ```powershell
 & 'C:\Program Files\PuTTY\plink.exe' -batch -i 'C:\Users\chano\OneDrive\Documentos\ssh\ProxmoxDIFZ2025.ppk' admin@192.168.8.39 "cd ~/deploys/chatIA && docker compose exec -T app npm run import:sofia-kb -- --chatbotId=1 --backup --purge --files=master,tramitesservicios"
