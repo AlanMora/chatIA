@@ -554,7 +554,13 @@ export async function buildKnowledgeContext(
       retrievalState.shouldPreferActiveService ? retrievalState.activeService : null,
     );
     const entityChunks = filterChunksByQueryEntity(activeServiceChunks, retrievalQuery);
-    const similarChunks = rankChunksByPreferredSkills(entityChunks, retrievalState.preferredSkills).slice(0, 7);
+    const rankedChunks = rankChunksByPreferredSkills(entityChunks, retrievalState.preferredSkills);
+    const similarChunks = [...lexicalFaqChunks, ...rankedChunks]
+      .filter((chunk, index, chunks) => {
+        const key = `${chunk.itemId}:${chunk.index}`;
+        return chunks.findIndex((candidate) => `${candidate.itemId}:${candidate.index}` === key) === index;
+      })
+      .slice(0, 7);
 
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
