@@ -64,6 +64,30 @@ Healthcheck:
 GET /api/health
 ```
 
+## Directorio Telefónico DIF Zapopan
+
+El archivo `jsonl/integrar/06_directorio_dif_zapopan.canonical.jsonl` contiene el directorio telefónico institucional normalizado para RAG. Su `skill` es `directorio_dif_zapopan` y debe considerarse fuente de verdad cuando el usuario pide teléfonos, números directos o contactos de oficinas, Habilitecas, Nidos, CAIC, centros o áreas operativas.
+
+Para regenerarlo desde el archivo limpio original:
+
+```powershell
+npm run prepare:directory-jsonl -- --source="C:\Users\chano\Downloads\Directorio_DIF_Zapopan_RAG_limpio.jsonl"
+```
+
+Para importarlo junto con la base completa:
+
+```powershell
+npm run import:sofia-kb
+```
+
+Para validar recuperación determinística del directorio:
+
+```powershell
+npm run eval:directory
+```
+
+Cuando la consulta requiere teléfono, el endpoint del widget consulta primero el directorio y responde sin mostrar extensiones, responsables ni datos internos. Las FAQs no se reescriben automáticamente si la pregunta no requiere teléfono.
+
 ## Rama De Desarrollo
 
 El trabajo de ampliacion se esta llevando en:

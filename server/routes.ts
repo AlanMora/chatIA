@@ -12,6 +12,7 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { buildKnowledgeContext, processKnowledgeItem } from "./knowledge-base";
 import { ELEVENLABS_VOICE_ENABLED } from "./feature-flags";
 import { buildRuntimeSystemPrompt, classifyConversationIntent, getDeterministicWidgetResponse } from "./conversation-policy";
+import { buildDirectoryContactResponse } from "./directory-contact";
 import { buildCapabilitiesPrompt, ensureAgentCapabilitiesSeeded } from "./agent-capabilities";
 import {
   filterModelCatalog,
@@ -2016,12 +2017,15 @@ export async function registerRoutes(
 
       // Get conversation history
       const messages = await storage.getWidgetMessagesByConversation(conversation.id);
+      const directoryContactResponse = await buildDirectoryContactResponse(chatbotId, message);
       const deterministicLocationResponse = await buildDeterministicLocationResponse(chatbotId, message);
       let deterministicResponse = getDeterministicWidgetResponse(messages);
       let deterministicKnowledgeResult: Awaited<ReturnType<typeof buildKnowledgeContext>> | null = null;
       const currentIntent = classifyConversationIntent(message, messages);
 
-      if (deterministicLocationResponse) {
+      if (directoryContactResponse) {
+        deterministicResponse = directoryContactResponse;
+      } else if (deterministicLocationResponse) {
         deterministicResponse = deterministicLocationResponse;
       }
 

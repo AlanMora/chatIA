@@ -34,6 +34,13 @@ const expectedFiles: ExpectedFile[] = [
       faq_dif_zapopan: 31,
     },
   },
+  {
+    path: "jsonl/integrar/06_directorio_dif_zapopan.canonical.jsonl",
+    total: 81,
+    skills: {
+      directorio_dif_zapopan: 81,
+    },
+  },
 ];
 
 const chatbotId = Number.parseInt(process.env.EVAL_CHATBOT_ID || "1", 10);

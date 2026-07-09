@@ -102,6 +102,10 @@ function getPreferredSkills(query: string): string[] {
     skills.push("ubicaciones_institucionales");
   }
 
+  if (/\b(telefono|numero|contacto|llamar|comunicar|comunicarme|directo|a donde llamo|donde llamo)\b/.test(normalized)) {
+    skills.unshift("directorio_dif_zapopan");
+  }
+
   if (/\b(tramite|servicio|requisito|documentacion|documentos|costo|cuanto cuesta|constancia|solicitud|registro|cita|adopcion|adoptar|pension|alimenticia|despensa|despenda)\b/.test(normalized)) {
     skills.push("tramites_servicios_dif_zapopan");
   }
@@ -123,6 +127,10 @@ function expandFaqRetrievalQuery(query: string): string {
 
   if (/\b(curso|cursos|taller|talleres|clase|clases)\b/.test(normalized) && /\b(cerca|colonia|ubicacion|donde|inscribir|meterme)\b/.test(normalized)) {
     expansions.push("Habilitecas talleres cursos ubicaciones oferta de cursos");
+  }
+
+  if (/\b(telefono|numero|contacto|llamar|comunicar|comunicarme|directo|a donde llamo|donde llamo)\b/.test(normalized)) {
+    expansions.push("Directorio Oficial DIF Zapopan telefono directo actualizado oficina contacto");
   }
 
   if (/\b(despensa|despensas|despenda|despendas|alimentaria|alimentario|comida|viveres|canasta)\b/.test(normalized)) {
