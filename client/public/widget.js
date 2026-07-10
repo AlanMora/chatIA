@@ -616,8 +616,9 @@
     #chatbot-widget-root .chatbot-widget-avatar-img,
     #chatbot-widget-root .chatbot-widget-message-avatar-img,
     #chatbot-widget-root .chatbot-widget-button-avatar-img { object-fit: contain; }
-    #chatbot-widget-root.sofia-widget-root .chatbot-widget-button-avatar-img { display: block !important; width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; visibility: visible !important; opacity: 1 !important; object-fit: contain !important; }
+    #chatbot-widget-root.sofia-widget-root .chatbot-widget-button-avatar-img { position: absolute !important; inset: 0 !important; display: block !important; width: 100% !important; height: 100% !important; max-width: none !important; max-height: none !important; visibility: visible !important; opacity: 1 !important; object-fit: contain !important; }
     #chatbot-widget-root .chatbot-widget-button { background: #F4066D !important; color: #FFFFFF !important; box-shadow: 0 8px 22px rgba(244, 6, 109, .32); }
+    #chatbot-widget-root.sofia-widget-root .chatbot-widget-button.has-avatar { background-color: transparent !important; box-shadow: none !important; }
     #chatbot-widget-root .chatbot-widget-button:hover { background: #D90461 !important; }
     #chatbot-widget-root .chatbot-widget-messages { padding: 16px; gap: 14px; background: #F8FAFC; scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
     #chatbot-widget-root .chatbot-widget-messages::-webkit-scrollbar { width: 6px; }
@@ -902,10 +903,14 @@
     
     const position = config.position || 'bottom-right';
     const posStyle = positionStyles[position];
+    const buttonAvatarUrl = config.avatarImage ? resolveAssetUrl(config.avatarImage) : '';
+    const buttonStyle = buttonAvatarUrl
+      ? `${posStyle} background: transparent url("${escapeHtmlAttribute(buttonAvatarUrl)}") center / contain no-repeat !important; color: transparent !important;`
+      : `${posStyle} background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};`;
     
     container.innerHTML = `
-      <button class="chatbot-widget-button" id="chatbot-toggle" style="${posStyle} background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};">
-        ${config.avatarImage ? renderBotAvatar('chatbot-widget-button-avatar') : iconChat}
+      <button class="chatbot-widget-button${buttonAvatarUrl ? ' has-avatar' : ''}" id="chatbot-toggle" style="${buttonStyle}">
+        ${buttonAvatarUrl ? renderBotAvatar('chatbot-widget-button-avatar') : iconChat}
       </button>
       <div class="chatbot-widget-container ${isOpen ? 'open' : ''}" id="chatbot-container" style="${posStyle}">
         <div class="chatbot-widget-header" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};">
