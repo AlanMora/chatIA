@@ -52,6 +52,27 @@ function normalizeGoogleMapsUrl(value: string): string {
   );
 }
 
+function getRecentHabilitecaQueryContext(messages: MessageLike[]): string | null {
+  const recentText = [...messages]
+    .slice(-8)
+    .map((message) => message.content)
+    .join("\n");
+  const normalized = normalizeForMatch(recentText);
+
+  if (!/\bhabilitecas?\b/.test(normalized)) return null;
+
+  const names = Array.from(new Set(
+    recentText.match(/Habilitecas?\s*\d{1,2}[^\n.]*/gi)
+      ?.map((name) => name.replace(/^[\d.\s-]+/, "").trim())
+      .filter((name) => name.length > 0) || [],
+  )).slice(0, 12);
+
+  return [
+    "Habilitecas ubicaciones direcciones telefono mapa google_maps_url dias_atencion horario_inicio horario_fin",
+    ...names,
+  ].join("\n");
+}
+
 function getRetrievalState(messages: MessageLike[]): {
   query: string | null;
   activeService: string | null;
@@ -73,6 +94,11 @@ function getRetrievalState(messages: MessageLike[]): {
     (intent === "section_request" || intent === "complete_record"),
   );
   const preferredSkills = getPreferredSkills(lastUserMessage);
+  const habilitecaQueryContext = getRecentHabilitecaQueryContext(messages);
+  const asksLocationOrSchedule = /\b(horario|hora|atienden|atencion|atención|abren|cierran|dias|días|ubicacion|ubicación|ubicaciones|direccion|dirección|donde|dónde|encuentran)\b/i.test(lastUserMessage);
+  const expandedLastUserMessage = habilitecaQueryContext && asksLocationOrSchedule
+    ? `${lastUserMessage}\n${habilitecaQueryContext}`
+    : lastUserMessage;
 
   if (activeService && shouldPreferActiveService) {
     return {
@@ -83,7 +109,7 @@ function getRetrievalState(messages: MessageLike[]): {
     };
   }
 
-  return { query: expandFaqRetrievalQuery(lastUserMessage), activeService, shouldPreferActiveService, preferredSkills };
+  return { query: expandFaqRetrievalQuery(expandedLastUserMessage), activeService, shouldPreferActiveService, preferredSkills };
 }
 
 function getPreferredSkills(query: string): string[] {
@@ -124,6 +150,10 @@ function getPreferredSkills(query: string): string[] {
 function expandFaqRetrievalQuery(query: string): string {
   const normalized = normalizeForMatch(query);
   const expansions: string[] = [];
+
+  if (/\bhabilitecas?\b/.test(normalized) && /\b(ubicacion|ubicaciones|direccion|direcciones|donde|encuentran|horario|atienden|dias|mapa)\b/.test(normalized)) {
+    expansions.push("Habilitecas ubicaciones direcciones telefono mapa google_maps_url dias_atencion horario_inicio horario_fin");
+  }
 
   if (/\b(curso|cursos|taller|talleres|clase|clases)\b/.test(normalized) && /\b(cerca|colonia|ubicacion|donde|inscribir|meterme)\b/.test(normalized)) {
     expansions.push("Habilitecas talleres cursos ubicaciones oferta de cursos");
@@ -678,6 +708,8 @@ En breve: [una frase breve sobre de que trata]
 23. No presentes FAQ y trámite/servicio como opciones contradictorias. Si ambos fragmentos coinciden en el tema, intégralos en una respuesta breve y coherente; si difieren en alcance o dependencia responsable, aclara esa diferencia.
 24. No incluyas una sección llamada "Fuentes" ni muestres nombres de documentos, FAQ, chunks, metadata o archivos al usuario.
 25. No pongas el nombre del servicio entre corchetes. Usa encabezado simple: Nombre del servicio.
+26. Para ubicaciones de varios centros, da formato limpio para celular: nombre del centro en negritas y debajo viñetas breves para Dirección, Teléfono y Mapa. No juntes dirección, teléfono y mapa en una sola línea.
+27. Para horarios de varios centros, si solo hay días de atención, escribe "Días de atención" y aclara una sola vez al inicio que el horario específico no aparece en la información disponible.
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}
