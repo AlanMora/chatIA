@@ -663,9 +663,9 @@
   const SOFIA_WELCOME_MESSAGE = 'Hola 👋 Soy SofIA, asistente virtual del DIF Zapopan.\n\nPuedo ayudarte a encontrar trámites, servicios, apoyos y programas.\n\n¿Qué necesitas?\n\nTambién puedes escribir directamente lo que necesitas.';
   const MAIN_MENU_OPTIONS = [
     { label: '🔎 Buscar un servicio', value: 'ACTION_SEARCH' },
-    { label: '🧭 No sé qué necesito', value: 'ACTION_GUIDED' },
     { label: '⭐ Servicios destacados', value: 'ACTION_FEATURED' },
     { label: '❓ Preguntas frecuentes', value: 'ACTION_FAQ' },
+    { label: '🧭 Necesito orientación', value: 'ACTION_GUIDED' },
   ];
   const DEFAULT_FEATURED_OPTIONS = [
     { label: 'Apoyos alimentarios', value: 'ACTION_FEATURED_1' },

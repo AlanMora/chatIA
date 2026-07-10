@@ -126,9 +126,9 @@ Puedo ayudarte a encontrar trámites, servicios, apoyos y programas.
 ¿Qué necesitas?
 
 1. Buscar un servicio
-2. No sé qué necesito
-3. Servicios destacados
-4. Preguntas frecuentes
+2. Servicios destacados
+3. Preguntas frecuentes
+4. Necesito orientación
 
 También puedes escribir directamente lo que necesitas.`;
 }
