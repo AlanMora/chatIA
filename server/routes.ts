@@ -1884,9 +1884,18 @@ export async function registerRoutes(
       if (!chatbot.isActive) {
         return res.status(403).json({ error: "Chatbot is not active" });
       }
+      const menuResponses = (await storage.getPredefinedResponsesByChatbot(chatbotId))
+        .filter((response) => response.isActive && ['featured', 'faq'].includes((response.category || '').trim().toLowerCase()));
+      const featuredServices = menuResponses
+        .filter((response) => (response.category || '').trim().toLowerCase() === 'featured')
+        .map((response) => ({ label: response.title, value: `ACTION_FEATURED_${response.id}`, query: response.title }));
+      const faqItems = menuResponses
+        .filter((response) => (response.category || '').trim().toLowerCase() === 'faq')
+        .map((response) => ({ label: response.title, value: `FAQ_${response.id}`, answer: response.content }));
+
       res.json({
         id: chatbot.id,
-        name: chatbot.name,
+        name: "SofIA · DIF Zapopan",
         primaryColor: chatbot.primaryColor,
         textColor: chatbot.textColor,
         position: chatbot.position,
@@ -1894,6 +1903,8 @@ export async function registerRoutes(
         avatarImage: chatbot.avatarImage,
         privacyNotice: chatbot.widgetRequirePrivacyNotice ? chatbot.widgetPrivacyNotice : null,
         elevenLabsAgentId: ELEVENLABS_VOICE_ENABLED ? chatbot.elevenLabsAgentId : null,
+        featuredServices,
+        faqItems,
       });
     } catch (error) {
       console.error("Error fetching widget config:", error);

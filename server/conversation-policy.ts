@@ -49,6 +49,9 @@ const GREETING_KEYWORDS =
 const AMBIGUOUS_HELP_KEYWORDS =
   /^(ayuda|informacion|informaci[oó]n|necesito apoyo|quiero apoyo|orientame|ori[eé]ntame|que hago|qu[eé] hago)[!.?\s]*$/i;
 
+const MENU_COMMAND_KEYWORDS =
+  /^(menu|menú|inicio|volver|volver al menu|volver al menú|regresar al menu|regresar al menú|menu principal|menú principal)[!.?\s]*$/i;
+
 const HUMAN_HANDOFF_KEYWORDS =
   /\b(hablar con alguien|asesor humano|persona real|contacto humano|operador|atienda una persona|quiero llamar|quiero comunicarme|atencion presencial|atenci[oó]n presencial)\b/i;
 
@@ -111,6 +114,24 @@ Puedes escribir el número o el apartado. También puedes pedir "ficha completa"
 `;
 }
 
+export function isHomeMenuCommand(content: string): boolean {
+  return MENU_COMMAND_KEYWORDS.test(content.trim());
+}
+
+export function buildMainMenuResponse(): string {
+  return `Hola 👋 Soy SofIA, asistente virtual del DIF Zapopan.
+
+Puedo ayudarte a encontrar trámites, servicios, apoyos y programas.
+
+¿Qué necesitas?
+
+1. Buscar un servicio
+2. No sé qué necesito
+3. Servicios destacados
+4. Preguntas frecuentes
+
+También puedes escribir directamente lo que necesitas.`;
+}
 export function buildAmbiguousHelpResponse(): string {
   return `Para orientarte mejor, dime qué necesitas o elige una opción:
 
@@ -465,6 +486,7 @@ export function getDeterministicWidgetResponse(messages: ConversationMessage[]):
   if (!lastMessage || lastMessage.role !== "user") return null;
 
   const currentContent = lastMessage.content.trim();
+  if (isHomeMenuCommand(currentContent)) return buildMainMenuResponse();
   const currentIntent = classifyConversationIntent(currentContent, messages);
   const selectedNumber = Number.parseInt(currentContent, 10);
 

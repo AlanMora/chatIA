@@ -601,6 +601,53 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+    /* DIF Zapopan visual layer: scoped so WordPress themes cannot override it. */
+    #chatbot-widget-root.sofia-widget-root,
+    #chatbot-widget-root.sofia-widget-root * { box-sizing: border-box !important; }
+    #chatbot-widget-root.sofia-widget-root { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #chatbot-widget-root .chatbot-widget-button,
+    #chatbot-widget-root .chatbot-widget-container { pointer-events: auto; }
+    #chatbot-widget-root .chatbot-widget-container { width: min(390px, calc(100vw - 32px)); height: min(680px, calc(100vh - 32px)); border-radius: 8px; background: #FFFFFF; color: #1F2937; box-shadow: 0 18px 48px rgba(23, 54, 93, .24); }
+    #chatbot-widget-root .chatbot-widget-header { min-height: 72px; padding: 14px 16px; background: linear-gradient(135deg, #F4066D 0%, #FF8200 100%) !important; color: #FFFFFF !important; }
+    #chatbot-widget-root .chatbot-widget-name { font-size: 17px; font-weight: 700; }
+    #chatbot-widget-root .chatbot-widget-status { font-size: 13px; opacity: 1; }
+    #chatbot-widget-root .chatbot-widget-status-dot { background: #6CC24A; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
+    #chatbot-widget-root .chatbot-widget-avatar { width: 42px; height: 42px; background: #FFFFFF; border: 2px solid rgba(255,255,255,.85); }
+    #chatbot-widget-root .chatbot-widget-avatar-img,
+    #chatbot-widget-root .chatbot-widget-message-avatar-img,
+    #chatbot-widget-root .chatbot-widget-button-avatar-img { object-fit: contain; }
+    #chatbot-widget-root .chatbot-widget-button { background: #F4066D !important; color: #FFFFFF !important; box-shadow: 0 8px 22px rgba(244, 6, 109, .32); }
+    #chatbot-widget-root .chatbot-widget-button:hover { background: #D90461 !important; }
+    #chatbot-widget-root .chatbot-widget-messages { padding: 16px; gap: 14px; background: #F8FAFC; scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
+    #chatbot-widget-root .chatbot-widget-messages::-webkit-scrollbar { width: 6px; }
+    #chatbot-widget-root .chatbot-widget-messages::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 999px; }
+    #chatbot-widget-root .chatbot-widget-message { max-width: 90%; }
+    #chatbot-widget-root .chatbot-widget-message-bubble { font-size: 15px; line-height: 1.55; }
+    #chatbot-widget-root .chatbot-widget-message.bot .chatbot-widget-message-bubble { background: #F3F4F6; color: #1F2937; }
+    #chatbot-widget-root .chatbot-widget-message.user .chatbot-widget-message-bubble { background: #F4066D !important; color: #FFFFFF !important; }
+    #chatbot-widget-root .chatbot-widget-message-bubble a { color: #00A9E0; }
+    #chatbot-widget-root .chatbot-widget-message.user .chatbot-widget-message-bubble a { color: #FFFFFF; }
+    #chatbot-widget-root .chatbot-widget-message-bubble p { margin: 0 0 10px; }
+    #chatbot-widget-root .chatbot-widget-message-bubble ul,
+    #chatbot-widget-root .chatbot-widget-message-bubble ol { margin: 8px 0 8px 20px; padding: 0; }
+    #chatbot-widget-root .chatbot-widget-message-bubble li { margin-bottom: 5px; line-height: 1.5; }
+    #chatbot-widget-root .chatbot-widget-input-area { padding: 12px 14px; border-color: #E5E7EB; background: #FFFFFF; }
+    #chatbot-widget-root .chatbot-widget-input { min-height: 44px; border-color: #E5E7EB; color: #1F2937; font-size: 15px; }
+    #chatbot-widget-root .chatbot-widget-send { width: 44px; height: 44px; min-width: 44px; background: #F4066D !important; color: #FFFFFF !important; }
+    #chatbot-widget-root .chatbot-widget-send:hover { background: #D90461 !important; }
+    #chatbot-widget-root .chatbot-widget-send svg { display: block; width: 20px; height: 20px; }
+    #chatbot-widget-root .chatbot-widget-privacy { padding: 8px 12px; background: #F3F4F6; border-color: #E5E7EB; color: #667085; font-size: 12px; line-height: 1.45; }
+    #chatbot-widget-root .sofia-quick-replies { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 4px 44px; }
+    #chatbot-widget-root .sofia-quick-reply { min-height: 44px; border: 1px solid #F4066D; border-radius: 999px; padding: 9px 14px; background: #FFFFFF; color: #F4066D; font: 600 14px/1.2 Inter, ui-sans-serif, system-ui, sans-serif; cursor: pointer; text-align: left; }
+    #chatbot-widget-root .sofia-quick-reply:hover { background: #FFF0F6; }
+    #chatbot-widget-root button:focus-visible,
+    #chatbot-widget-root input:focus-visible { outline: 3px solid rgba(244, 6, 109, .3) !important; outline-offset: 2px; }
+    @media (max-width: 480px) {
+      #chatbot-widget-root .chatbot-widget-container { width: calc(100vw - 16px); height: calc(100dvh - 16px); right: 8px !important; bottom: 8px !important; border-radius: 8px; }
+      #chatbot-widget-root .chatbot-widget-message { max-width: 94%; }
+      #chatbot-widget-root .sofia-quick-replies { margin-left: 0; }
+      #chatbot-widget-root .sofia-quick-reply { flex: 1 1 auto; }
+    }
   `;
   document.head.appendChild(styles);
   
@@ -612,6 +659,29 @@
   const iconMic = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
   const iconMicOff = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>';
   const iconPhoneOff = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="22" x2="2" y1="2" y2="22"/></svg>';
+  const SOFIA_DISPLAY_NAME = 'SofIA · DIF Zapopan';
+  const SOFIA_WELCOME_MESSAGE = 'Hola 👋 Soy SofIA, asistente virtual del DIF Zapopan.\n\nPuedo ayudarte a encontrar trámites, servicios, apoyos y programas.\n\n¿Qué necesitas?\n\nTambién puedes escribir directamente lo que necesitas.';
+  const MAIN_MENU_OPTIONS = [
+    { label: '🔎 Buscar un servicio', value: 'ACTION_SEARCH' },
+    { label: '🧭 No sé qué necesito', value: 'ACTION_GUIDED' },
+    { label: '⭐ Servicios destacados', value: 'ACTION_FEATURED' },
+    { label: '❓ Preguntas frecuentes', value: 'ACTION_FAQ' },
+  ];
+  const DEFAULT_FEATURED_OPTIONS = [
+    { label: 'Apoyos alimentarios', value: 'ACTION_FEATURED_1' },
+    { label: 'Atención psicológica', value: 'ACTION_FEATURED_2' },
+    { label: 'Servicios para personas mayores', value: 'ACTION_FEATURED_3' },
+    { label: 'Discapacidad y rehabilitación', value: 'ACTION_FEATURED_4' },
+    { label: 'Talleres y actividades', value: 'ACTION_FEATURED_5' },
+    { label: 'Pláticas prematrimoniales', value: 'ACTION_FEATURED_6' },
+  ];
+  const DEFAULT_FAQ_OPTIONS = [
+    { label: '¿Cómo busco un trámite o servicio?', value: 'FAQ_SEARCH', answer: 'Escribe con tus propias palabras lo que necesitas.\n\nPor ejemplo: “apoyo alimentario”, “psicología” o “pláticas prematrimoniales”.' },
+    { label: '¿La información es oficial?', value: 'FAQ_OFFICIAL', answer: 'SofIA consulta información institucional del DIF Zapopan.\n\nLos contenidos deben mantenerse actualizados y validados por las áreas responsables.' },
+    { label: '¿SofIA puede realizar trámites?', value: 'FAQ_PROCEDURES', answer: 'SofIA brinda orientación sobre trámites, servicios y programas.\n\nPor ahora no realiza trámites completos ni sustituye la atención del personal del DIF Zapopan.' },
+    { label: '¿Puedo compartir datos personales?', value: 'FAQ_PRIVACY', answer: 'No compartas datos personales sensibles, contraseñas, documentos oficiales ni información de emergencia por este chat.' },
+    { label: '¿Cómo regreso al menú principal?', value: 'FAQ_HOME', answer: 'Puedes escribir “menú”, “inicio” o usar el botón “Menú principal”.' },
+  ];
   
   let config = null;
   let voiceConfig = null;
@@ -632,6 +702,10 @@
   let leadSubmitted = localStorage.getItem('chatbot-lead-' + chatbotId) === 'true';
   let visitorData = JSON.parse(localStorage.getItem('chatbot-visitor-' + chatbotId) || '{}');
   let sessionId = generateId();
+  let menuMode = true;
+  let quickReplyContext = 'main';
+  let guidedStep = 0;
+  let uxMode = '';
   
   function generateId() {
     return 'xxxx-xxxx-xxxx'.replace(/x/g, function() {
@@ -655,7 +729,7 @@
   function renderBotAvatar(className) {
     const avatarUrl = resolveAssetUrl(config && config.avatarImage);
     if (avatarUrl) {
-      return '<img class="' + className + '-img" src="' + escapeHtmlAttribute(avatarUrl) + '" alt="' + escapeHtmlAttribute(config.name || 'SofIA') + '" loading="lazy">';
+      return '<img class="' + className + '-img" src="' + escapeHtmlAttribute(avatarUrl) + '" alt="' + escapeHtmlAttribute(SOFIA_DISPLAY_NAME) + '" loading="lazy">';
     }
     return iconBot;
   }
@@ -668,9 +742,7 @@
         throw new Error('Widget config request failed: ' + response.status + ' ' + response.statusText);
       }
       config = await response.json();
-      if (config.welcomeMessage) {
-        messages.push({ role: 'assistant', content: config.welcomeMessage });
-      }
+      messages = [{ role: 'assistant', content: SOFIA_WELCOME_MESSAGE }];
       
       // Check if this chatbot has its own ElevenLabs agent configured
       if (ENABLE_ELEVENLABS_VOICE && config.elevenLabsAgentId) {
@@ -710,6 +782,104 @@
     }
   }
   
+  function getFeaturedOptions() {
+    const configured = Array.isArray(config && config.featuredServices) ? config.featuredServices : [];
+    return configured.length > 0 ? configured : DEFAULT_FEATURED_OPTIONS;
+  }
+
+  function getFaqOptions() {
+    const configured = Array.isArray(config && config.faqItems) ? config.faqItems : [];
+    return configured.length > 0 ? configured : DEFAULT_FAQ_OPTIONS;
+  }
+
+  function renderQuickReplies() {
+    if (isLoading) return '';
+    let options = [];
+    if (menuMode || quickReplyContext === 'main') options = MAIN_MENU_OPTIONS;
+    else if (quickReplyContext === 'featured') options = getFeaturedOptions();
+    else if (quickReplyContext === 'faq') options = getFaqOptions();
+    else if (messages.length > 1 && messages[messages.length - 1].role === 'assistant') {
+      options = [
+        { label: '🏠 Menú principal', value: 'ACTION_HOME' },
+        { label: '🔎 Buscar otro servicio', value: 'ACTION_NEW_SEARCH' },
+      ];
+    }
+    if (!options.length) return '';
+    return '<div class="sofia-quick-replies" role="group" aria-label="Acciones rápidas">' + options.map(function(option) {
+      return '<button type="button" class="sofia-quick-reply" data-action="' + escapeHtmlAttribute(option.value) + '" title="' + escapeHtmlAttribute(option.label) + '">' + escapeHtml(option.label) + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function appendAssistantMessage(content) {
+    messages.push({ role: 'assistant', content: content });
+  }
+
+  function resetNavigation() {
+    menuMode = true;
+    quickReplyContext = 'main';
+    guidedStep = 0;
+    uxMode = '';
+  }
+
+  function isHomeMenuCommand(value) {
+    return /^(menu|menú|inicio|volver|volver al menu|volver al menú|regresar al menu|regresar al menú|menu principal|menú principal)[!.?\s]*$/i.test(String(value || '').trim());
+  }
+  function showMainMenu() {
+    messages = [{ role: 'assistant', content: SOFIA_WELCOME_MESSAGE }];
+    resetNavigation();
+    hasError = false;
+    errorMessage = '';
+    render();
+  }
+
+  function handleQuickAction(action) {
+    const actionValue = String(action || '');
+    if (actionValue === 'ACTION_HOME') return showMainMenu();
+    if (actionValue === 'ACTION_SEARCH' || actionValue === 'ACTION_NEW_SEARCH') {
+      menuMode = false;
+      quickReplyContext = 'post';
+      uxMode = 'search';
+      appendAssistantMessage('Escribe con tus propias palabras lo que necesitas.\n\nPor ejemplo:\n\n- apoyo alimentario\n- atención psicológica\n- pláticas prematrimoniales\n- servicios para personas mayores');
+      render();
+      return;
+    }
+    if (actionValue === 'ACTION_GUIDED') {
+      menuMode = false;
+      quickReplyContext = 'guided';
+      uxMode = 'guided';
+      guidedStep = 1;
+      appendAssistantMessage('Te ayudo 😊\n\n¿Para quién es el apoyo o servicio?\n\n1) Para mí\n2) Niñez\n3) Persona adulta mayor\n4) Persona con discapacidad\n5) Familia o persona cuidadora');
+      render();
+      return;
+    }
+    if (actionValue === 'ACTION_FEATURED') {
+      menuMode = false;
+      quickReplyContext = 'featured';
+      appendAssistantMessage('Estos son algunos de los servicios más consultados:\n\nElige una opción o escribe lo que necesitas.');
+      render();
+      return;
+    }
+    if (actionValue === 'ACTION_FAQ') {
+      menuMode = false;
+      quickReplyContext = 'faq';
+      appendAssistantMessage('Preguntas frecuentes');
+      render();
+      return;
+    }
+    const faqOption = getFaqOptions().find(function(option) { return option.value === actionValue; });
+    if (faqOption) {
+      messages.push({ role: 'user', content: faqOption.label });
+      appendAssistantMessage(faqOption.answer);
+      quickReplyContext = 'post';
+      render();
+      return;
+    }
+    const featuredOption = getFeaturedOptions().find(function(option) { return option.value === actionValue; });
+    if (featuredOption) {
+      quickReplyContext = 'post';
+      sendMessage(featuredOption.query || featuredOption.label);
+    }
+  }
   function render() {
     if (!config) return;
     
@@ -717,6 +887,7 @@
     if (!container) {
       container = document.createElement('div');
       container.id = 'chatbot-widget-root';
+      container.className = 'sofia-widget-root';
       document.body.appendChild(container);
     }
     
@@ -739,14 +910,14 @@
           <div class="chatbot-widget-header-info">
             <div class="chatbot-widget-avatar">${renderBotAvatar('chatbot-widget-avatar')}</div>
             <div>
-              <div class="chatbot-widget-name">${config.name || 'Chatbot'}</div>
+              <div class="chatbot-widget-name">${SOFIA_DISPLAY_NAME}</div>
               <div class="chatbot-widget-status">
                 <span class="chatbot-widget-status-dot"></span>
-                Online
+                En línea
               </div>
             </div>
           </div>
-          <button class="chatbot-widget-close" id="chatbot-close" style="color: ${config.textColor || '#fff'};">
+          <button type="button" aria-label="Cerrar chat" title="Cerrar chat" class="chatbot-widget-close" id="chatbot-close" style="color: ${config.textColor || '#fff'};">
             ${iconClose}
           </button>
         </div>
@@ -789,6 +960,7 @@
                 </div>
               </div>
             `).join('')}
+            ${renderQuickReplies()}
             ${isLoading ? `
               <div class="chatbot-widget-message bot">
                 <div class="chatbot-widget-message-avatar" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};">
@@ -801,7 +973,7 @@
             ` : ''}
           </div>
           <div class="chatbot-widget-input-area">
-          ${isVoiceActive ? '' : `<input type="text" class="chatbot-widget-input" id="chatbot-input" placeholder="Type a message..." ${isLoading ? 'disabled' : ''}>`}
+          ${isVoiceActive ? '' : `<input type="text" class="chatbot-widget-input" id="chatbot-input" placeholder="Escribe tu mensaje..." aria-label="Escribe tu mensaje" ${isLoading ? 'disabled' : ''}>`}
           ${voiceConfig && voiceConfig.enabled ? (
             isVoiceActive ? `
               <div class="chatbot-widget-voice-status" style="background: ${isSpeaking ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)'}; color: ${isSpeaking ? '#22c55e' : '#3b82f6'};">
@@ -819,7 +991,7 @@
               </button>
             `
           ) : ''}
-          <button class="chatbot-widget-send" id="chatbot-send" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};" ${isLoading || isVoiceActive ? 'disabled' : ''}>
+          <button type="button" aria-label="Enviar mensaje" title="Enviar mensaje" class="chatbot-widget-send" id="chatbot-send" style="background: ${config.primaryColor || '#3B82F6'}; color: ${config.textColor || '#fff'};" ${isLoading || isVoiceActive ? 'disabled' : ''}>
             ${iconSend}
           </button>
         </div>
@@ -857,6 +1029,12 @@
       render();
     };
     
+    document.querySelectorAll('.sofia-quick-reply').forEach(function(button) {
+      button.onclick = function() {
+        handleQuickAction(button.getAttribute('data-action'));
+      };
+    });
+
     // Lead form submission
     const leadSubmitBtn = document.getElementById('chatbot-lead-submit');
     if (leadSubmitBtn) {
@@ -1416,6 +1594,10 @@
   }
   
   async function sendMessage(text) {
+    if (isHomeMenuCommand(text)) {
+      showMainMenu();
+      return;
+    }
     lastUserMessage = text;
     hasError = false;
     errorMessage = '';

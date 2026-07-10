@@ -152,7 +152,7 @@ export function PredefinedResponses({ chatbotId }: PredefinedResponsesProps) {
               data-testid="input-new-response-content"
             />
             <Input
-              placeholder="Categoría (opcional)"
+              placeholder="Categoría: featured o faq (opcional)"
               value={newResponse.category}
               onChange={(e) => setNewResponse({ ...newResponse, category: e.target.value })}
               data-testid="input-new-response-category"
@@ -187,7 +187,7 @@ export function PredefinedResponses({ chatbotId }: PredefinedResponsesProps) {
                     data-testid={`input-edit-response-content-${response.id}`}
                   />
                   <Input
-                    placeholder="Categoría (opcional)"
+                    placeholder="Categoría: featured o faq (opcional)"
                     value={editResponse.category}
                     onChange={(e) => setEditResponse({ ...editResponse, category: e.target.value })}
                     data-testid={`input-edit-response-category-${response.id}`}
