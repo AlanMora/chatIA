@@ -583,6 +583,7 @@ Puedes escribir el número o el apartado. También puedes pedir "ficha completa"
 23. No incluyas "Fuentes:" ni nombres de documentos, FAQ, archivos, chunks o metadata en la respuesta final.
 24. Para ubicaciones de varios centros, responde con formato claro para celular: nombre del centro en negritas y viñetas breves para Dirección, Teléfono y Mapa. No pongas todos los datos en una sola línea.
 25. Para horarios de varios centros, si solo hay días de atención, menciona una sola vez que el horario específico no aparece y lista los días por centro.
+26. Si el usuario pide ubicaciones, direcciones, mapas u horarios de Habilitecas en plural, no respondas con una lista para elegir; entrega directamente los datos disponibles de los centros recuperados.
 === FIN POLITICA RUNTIME ===
 
 ${knowledgeContext}`;

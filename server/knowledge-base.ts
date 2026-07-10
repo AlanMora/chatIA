@@ -287,7 +287,9 @@ function filterChunksByQueryEntity(chunks: RetrievedChunk[], query: string): Ret
 async function getLexicalKnowledgeMatches(chatbotId: number, query: string): Promise<RetrievedChunk[]> {
   const normalized = normalizeForMatch(query);
   const aliases: string[] = [];
+  const wantsHabilitecaLocations = /\bhabilitecas?\b/.test(normalized) && /\b(ubicacion|ubicaciones|direccion|direcciones|donde|encuentran|horario|atienden|dias|mapa)\b/.test(normalized);
 
+  if (wantsHabilitecaLocations) aliases.push("habiliteca", "habilitecas");
   if (/\b(curso|cursos|taller|talleres|clase|clases)\b/.test(normalized) && /\b(cerca|colonia|ubicacion|donde|inscribir|meterme)\b/.test(normalized)) aliases.push("habilitecas");
   if (/\b(despensa|despensas|despenda|despendas|alimentaria|alimentario|comida|viveres|canasta)\b/.test(normalized)) aliases.push("ayuda alimentaria", "asistencia alimentaria", "alimentaria directa", "despensa");
   if (/\b(pension|manutencion|alimenticia|papa de mis hijos|padre de mis hijos|no me ayuda)\b/.test(normalized)) aliases.push("pension alimenticia", "procuraduria social", "asesoria juridica");
@@ -643,7 +645,7 @@ export async function buildKnowledgeContext(
         const key = `${chunk.itemId}:${chunk.index}`;
         return chunks.findIndex((candidate) => `${candidate.itemId}:${candidate.index}` === key) === index;
       })
-      .slice(0, 7);
+      .slice(0, retrievalState.preferredSkills.includes("ubicaciones_institucionales") ? 12 : 7);
 
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
@@ -710,6 +712,7 @@ En breve: [una frase breve sobre de que trata]
 25. No pongas el nombre del servicio entre corchetes. Usa encabezado simple: Nombre del servicio.
 26. Para ubicaciones de varios centros, da formato limpio para celular: nombre del centro en negritas y debajo viñetas breves para Dirección, Teléfono y Mapa. No juntes dirección, teléfono y mapa en una sola línea.
 27. Para horarios de varios centros, si solo hay días de atención, escribe "Días de atención" y aclara una sola vez al inicio que el horario específico no aparece en la información disponible.
+28. Si el usuario pide ubicaciones, direcciones, mapa u horarios de Habilitecas en plural, NO lo trates como listado para elegir. Responde directamente los centros recuperados con sus datos disponibles, máximo 10, y pregunta si quiere ver más.
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}
