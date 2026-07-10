@@ -6,25 +6,14 @@ import { initializeDatabase } from "./db";
 import { createServer } from "http";
 import cors from "cors";
 import { storage } from "./storage";
+import { isWidgetOriginAllowed as isChatbotWidgetOriginAllowed } from "./widget-security";
 
 const app = express();
 const httpServer = createServer(app);
 
-function normalizeOriginHost(origin?: string) {
-  if (!origin) return null;
-  try {
-    return new URL(origin).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
-
-function parseAllowedDomains(value?: string | null) {
-  return (value || "")
-    .split(/[\n,]+/)
-    .map((domain) => domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
-    .filter(Boolean);
-}
+// HAProxy is the trusted TLS terminator in production. Express uses these
+// headers for request protocol and client IP (including widget rate limits).
+app.set("trust proxy", 1);
 
 async function isWidgetOriginAllowed(req: Request, origin?: string) {
   if (!origin) return true;
@@ -32,25 +21,21 @@ async function isWidgetOriginAllowed(req: Request, origin?: string) {
   if (!Number.isInteger(chatbotId)) return true;
 
   const chatbot = await storage.getChatbot(chatbotId);
-  const allowedDomains = parseAllowedDomains(chatbot?.allowedDomains);
-  if (allowedDomains.length === 0 || allowedDomains.includes("*")) return true;
-
-  const originHost = normalizeOriginHost(origin);
-  if (!originHost) return false;
-
-  return allowedDomains.some((domain) => originHost === domain || originHost.endsWith(`.${domain}`));
+  return chatbot ? isChatbotWidgetOriginAllowed(chatbot, origin) : false;
 }
 
-// Enable CORS for widget endpoints with optional per-chatbot domain restrictions.
+// The public widget has no authenticated browser session, so CORS is limited to
+// configured origins and credentials are deliberately omitted.
 app.use("/api/widget", cors((req, callback) => {
   callback(null, {
     origin: (origin, originCallback) => {
       isWidgetOriginAllowed(req as Request, origin)
-        .then((allowed) => originCallback(allowed ? null : new Error("Origin not allowed"), allowed))
-        .catch(() => originCallback(new Error("Origin validation failed"), false));
+        .then((allowed) => originCallback(null, allowed))
+        .catch(() => originCallback(null, false));
     },
     methods: ["GET", "POST", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 204,
   });
 }));
 

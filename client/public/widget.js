@@ -13,7 +13,19 @@
     return;
   }
   
-  const baseUrl = script.src.replace('/widget.js', '');
+  let scriptUrl;
+  try {
+    scriptUrl = new URL(script.src);
+  } catch (_error) {
+    console.error('ChatBot Widget: Invalid script URL');
+    return;
+  }
+
+  // URL.origin deliberately excludes the filename, path and cache-busting query string.
+  const baseUrl = scriptUrl.origin;
+  const widgetApiUrl = function(path) {
+    return new URL(path, baseUrl).href;
+  };
   
   const styles = document.createElement('style');
   styles.textContent = `
@@ -650,8 +662,11 @@
   
   async function fetchConfig() {
     try {
-      const response = await fetch(baseUrl + '/api/widget/' + chatbotId + '/config');
-      if (!response.ok) throw new Error('Failed to fetch config');
+      const configUrl = widgetApiUrl('/api/widget/' + chatbotId + '/config');
+      const response = await fetch(configUrl, { credentials: 'omit' });
+      if (!response.ok) {
+        throw new Error('Widget config request failed: ' + response.status + ' ' + response.statusText);
+      }
       config = await response.json();
       if (config.welcomeMessage) {
         messages.push({ role: 'assistant', content: config.welcomeMessage });
@@ -667,7 +682,7 @@
       
       // Fetch lead capture config
       try {
-        const leadResponse = await fetch(baseUrl + '/api/widget/' + chatbotId + '/lead-config');
+        const leadResponse = await fetch(widgetApiUrl('/api/widget/' + chatbotId + '/lead-config'), { credentials: 'omit' });
         if (leadResponse.ok) {
           leadConfig = await leadResponse.json();
           // Show lead form if required and not already submitted
@@ -687,7 +702,11 @@
         }, openDelayMs);
       }
     } catch (error) {
-      console.error('ChatBot Widget: Failed to load config', error);
+      console.error('ChatBot Widget: Failed to load config', {
+        url: widgetApiUrl('/api/widget/' + chatbotId + '/config'),
+        origin: window.location.origin,
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   }
   
@@ -872,8 +891,9 @@
         
         // Send visitor info to server
         try {
-          await fetch(baseUrl + '/api/widget/' + chatbotId + '/conversation/' + sessionId + '/visitor', {
+          await fetch(widgetApiUrl('/api/widget/' + chatbotId + '/conversation/' + sessionId + '/visitor'), {
             method: 'PATCH',
+            credentials: 'omit',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               visitorName: data.name || null,
@@ -1010,7 +1030,7 @@
         console.error('ElevenLabs SDK failed, trying WebSocket fallback:', sdkError);
 
         // Fallback to signed URL WebSocket approach
-        const signedUrlResponse = await fetch(baseUrl + '/api/widget/' + chatbotId + '/voice/signed-url');
+        const signedUrlResponse = await fetch(widgetApiUrl('/api/widget/' + chatbotId + '/voice/signed-url'), { credentials: 'omit' });
         if (!signedUrlResponse.ok) {
           throw new Error('No se pudo obtener conexión de voz');
         }
@@ -1404,8 +1424,9 @@
     render();
     
     try {
-      const response = await fetch(baseUrl + '/api/widget/' + chatbotId + '/chat', {
+      const response = await fetch(widgetApiUrl('/api/widget/' + chatbotId + '/chat'), {
         method: 'POST',
+        credentials: 'omit',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, sessionId: sessionId })
       });
@@ -1454,8 +1475,9 @@
   
   async function submitRating(rating) {
     try {
-      const response = await fetch(baseUrl + '/api/widget/' + chatbotId + '/rate', {
+      const response = await fetch(widgetApiUrl('/api/widget/' + chatbotId + '/rate'), {
         method: 'POST',
+        credentials: 'omit',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sessionId, rating: rating })
       });

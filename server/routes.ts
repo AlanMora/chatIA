@@ -13,6 +13,7 @@ import { buildKnowledgeContext, processKnowledgeItem } from "./knowledge-base";
 import { ELEVENLABS_VOICE_ENABLED } from "./feature-flags";
 import { buildRuntimeSystemPrompt, classifyConversationIntent, getDeterministicWidgetResponse } from "./conversation-policy";
 import { buildDirectoryContactResponse } from "./directory-contact";
+import { isWidgetOriginAllowed } from "./widget-security";
 import { buildCapabilitiesPrompt, ensureAgentCapabilitiesSeeded } from "./agent-capabilities";
 import {
   filterModelCatalog,
@@ -304,29 +305,8 @@ function sanitizeChatbot(chatbot: Chatbot) {
   };
 }
 
-function parseAllowedDomains(value?: string | null): string[] {
-  return (value || "")
-    .split(/[\n,]+/)
-    .map((domain) => domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""))
-    .filter(Boolean);
-}
-
-function originHost(origin?: string): string | null {
-  if (!origin) return null;
-  try {
-    return new URL(origin).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
-
 function isOriginAllowedForChatbot(chatbot: Chatbot, origin?: string): boolean {
-  if (!origin) return true;
-  const allowedDomains = parseAllowedDomains(chatbot.allowedDomains);
-  if (allowedDomains.length === 0 || allowedDomains.includes("*")) return true;
-  const host = originHost(origin);
-  if (!host) return false;
-  return allowedDomains.some((domain) => host === domain || host.endsWith(`.${domain}`));
+  return isWidgetOriginAllowed(chatbot, origin);
 }
 
 const widgetRateLimits = new Map<string, { count: number; resetAt: number }>();

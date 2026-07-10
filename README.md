@@ -88,6 +88,34 @@ npm run eval:directory
 
 Cuando la consulta requiere teléfono, el endpoint del widget consulta primero el directorio y responde sin mostrar extensiones, responsables ni datos internos. Las FAQs no se reescriben automáticamente si la pregunta no requiere teléfono.
 
+## Widget Web Y CORS
+
+El widget público toma su origen desde la URL del propio script. Un parámetro de cache, como `?v=20260706-avatar-font`, no modifica las rutas API. Las peticiones públicas del widget no envían cookies ni usan sesión administrativa.
+
+Configura en **Configuración > Seguridad Productiva del Widget** los orígenes permitidos del chatbot con valores explícitos:
+
+```text
+https://www.difzapopan.gob.mx
+https://difzapopan.gob.mx
+```
+
+Como respaldo operativo, `WIDGET_ALLOWED_ORIGINS` acepta la misma lista separada por comas cuando el chatbot aún no tenga dominios definidos. En producción una lista vacía no autoriza CORS externo. Para desarrollo local agrega el origen completo, incluyendo puerto si aplica, por ejemplo `http://localhost:5173`.
+
+```powershell
+npm run eval:widget-security
+```
+
+HAProxy debe terminar TLS y reenviar al contenedor los encabezados `Host`, `X-Forwarded-Proto: https`, `X-Forwarded-Host`, `X-Forwarded-For` y `X-Real-IP`. No debe publicar directamente el puerto 5000. En WordPress se requiere permitir `script-src` y `connect-src` hacia `https://chatdif.difzapopan.gob.mx`; si algún despliegue usa iframe, agregar también ese dominio a `frame-src`.
+
+Fragmento recomendado para WordPress:
+
+```html
+<script
+  src="https://chatdif.difzapopan.gob.mx/widget.js?v=20260710-cors"
+  data-chatbot-id="1"
+  defer>
+</script>
+```
 ## Rama De Desarrollo
 
 El trabajo de ampliacion se esta llevando en:

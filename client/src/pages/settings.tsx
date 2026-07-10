@@ -173,7 +173,7 @@ export default function Settings() {
                   data-testid="textarea-allowed-domains"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Un dominio por línea o separado por coma. Vacío permite cualquier dominio.
+                  Un origen por línea o separado por coma. Usa https://www.difzapopan.gob.mx y https://difzapopan.gob.mx. En producción, vacío bloquea el acceso CORS externo.
                 </p>
               </div>
               <div className="space-y-4">

@@ -13,6 +13,7 @@
     "eval:faq": "tsx script/evaluate-faq-retrieval.ts",
     "eval:directory": "tsx script/evaluate-directory-contact.ts",
     "eval:jsonl-import": "tsx script/evaluate-jsonl-import.ts",
+    "eval:widget-security": "tsx script/evaluate-widget-security.ts",
     "prepare:faq-md": "tsx script/prepare-faq-md.ts",
     "prepare:directory-jsonl": "tsx script/prepare-directory-jsonl.ts",
     "import:sofia-kb": "tsx script/import-sofia-kb.ts",
