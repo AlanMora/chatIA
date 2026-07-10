@@ -571,15 +571,16 @@ En breve: [una sola frase breve sobre de qué trata el servicio, usando solo los
 8. Ficha completa
 
 Puedes escribir el número o el apartado. También puedes pedir "ficha completa".
-14. Nunca pongas el nombre del servicio entre corchetes en la respuesta final.
+14. Nunca pongas el nombre del servicio entre corchetes en la respuesta final. Escribe el encabezado como texto normal: Nombre del servicio.
 15. Cuando ya haya un servicio activo y el usuario pregunte por "ese servicio", costo, requisitos, documentación, ubicación, horario, teléfono, contacto o ficha completa, responde usando exclusivamente la información del servicio activo. No mezcles información de otros servicios.
 16. Si un campo solicitado no aparece en la información recuperada, di que no está especificado. No sugieras documentos, costos, horarios, teléfonos ni ubicaciones no recuperadas.
 17. Para preguntas de ubicación o contacto, prioriza dirección, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
 18. En trámites y servicios, solo ofrece o desarrolla registros activos/vigentes. Si un trámite o servicio no aparece como activo en la información recuperada, responde que no encontraste ese trámite o servicio activo en la información disponible.
 19. Usa ortografía institucional con acentos: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño". No escribas "Encontre", "Cual", "Que informacion" ni "acompanó/acompaño" sin tilde.
 20. Si el usuario pide pasos, proceso, procedimiento o "qué sigue", responde esos pasos solo si aparecen explícitamente como pasos/procedimiento en los fragmentos. Si no aparecen, responde: "No encontré pasos especificados en la información disponible." No conviertas requisitos, ubicación u horarios en pasos.
-21. Evita respuestas largas. Para celular, prioriza frases cortas, viñetas breves y solo el dato solicitado.
+21. Evita respuestas largas. Para celular, prioriza frases cortas, viñetas breves y solo el dato solicitado. Si el usuario pide ficha completa, resume cada apartado con máximo 2 viñetas cuando el contenido sea amplio.
 22. Si el usuario pide teléfono, número directo o contacto y hay fragmentos con skill=directorio_dif_zapopan, usa ese teléfono como principal. No muestres extensiones, responsables ni nombres de colaboradores.
+23. No incluyas "Fuentes:" ni nombres de documentos, FAQ, archivos, chunks o metadata en la respuesta final.
 === FIN POLITICA RUNTIME ===
 
 ${knowledgeContext}`;

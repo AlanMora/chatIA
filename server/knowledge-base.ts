@@ -102,7 +102,7 @@ function getPreferredSkills(query: string): string[] {
     skills.push("ubicaciones_institucionales");
   }
 
-  if (/\b(telefono|numero|llamar|comunicar|comunicarme|a donde llamo|donde llamo)\b/.test(normalized)) {
+  if (/\b(telefono|numero|llamar|comunicar|comunicarme|contacto|informes|a donde llamo|donde llamo)\b/.test(normalized)) {
     skills.unshift("directorio_dif_zapopan");
   }
 
@@ -129,8 +129,8 @@ function expandFaqRetrievalQuery(query: string): string {
     expansions.push("Habilitecas talleres cursos ubicaciones oferta de cursos");
   }
 
-  if (/\b(telefono|numero|llamar|comunicar|comunicarme|a donde llamo|donde llamo)\b/.test(normalized)) {
-    expansions.push("Directorio Oficial DIF Zapopan telefono directo actualizado oficina contacto");
+  if (/\b(telefono|numero|llamar|comunicar|comunicarme|contacto|informes|a donde llamo|donde llamo)\b/.test(normalized)) {
+    expansions.push("Directorio Oficial DIF Zapopan telefono directo actualizado oficina contacto informes");
   }
 
   if (/\b(despensa|despensas|despenda|despendas|alimentaria|alimentario|comida|viveres|canasta)\b/.test(normalized)) {
@@ -190,7 +190,7 @@ function filterChunksByActiveService(chunks: RetrievedChunk[], activeService: st
     return haystack.includes(normalizedService) || serviceTerms.every((term) => haystack.includes(term));
   });
 
-  return matched.length > 0 ? matched : chunks;
+  return matched.length > 0 ? matched : [];
 }
 
 function rankChunksByPreferredSkills(chunks: RetrievedChunk[], preferredSkills: string[]): RetrievedChunk[] {
@@ -676,6 +676,8 @@ En breve: [una frase breve sobre de que trata]
  21. Usa ortografía institucional con acentos en la respuesta final: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño".
 22. Si recuperas una pregunta frecuente y también trámites, servicios, programas o ubicaciones sobre el mismo tema, úsalos como información complementaria. Responde primero la intención del usuario con la FAQ cuando sea la fuente más directa, y complementa con requisitos, costos, horarios, ubicación, contacto o enlaces solo si el usuario lo pidió o si ayuda claramente a completar la orientación.
 23. No presentes FAQ y trámite/servicio como opciones contradictorias. Si ambos fragmentos coinciden en el tema, intégralos en una respuesta breve y coherente; si difieren en alcance o dependencia responsable, aclara esa diferencia.
+24. No incluyas una sección llamada "Fuentes" ni muestres nombres de documentos, FAQ, chunks, metadata o archivos al usuario.
+25. No pongas el nombre del servicio entre corchetes. Usa encabezado simple: Nombre del servicio.
 
 === FRAGMENTOS DE CONOCIMIENTO ===
 ${body}

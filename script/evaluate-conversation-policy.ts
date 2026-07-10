@@ -349,6 +349,8 @@ try {
   assert(runtimePrompt.includes("POLITICA RUNTIME DE CONVERSACION"), "runtime prompt sin politica");
   assert(runtimePrompt.includes("Contexto RAG"), "runtime prompt sin contexto RAG");
   assert(runtimePrompt.includes("consulta es ambigua"), "runtime prompt sin politica UX ambigua");
+  assert(runtimePrompt.includes("No incluyas \"Fuentes:\""), "runtime prompt permite Fuentes visibles");
+  assert(runtimePrompt.includes("Nunca pongas el nombre del servicio entre corchetes"), "runtime prompt sin regla de corchetes");
   assert(buildAmbiguousHelpResponse().includes("Buscar un trámite o servicio"), "respuesta ambigua sin opciones");
   assert(
     getActiveServiceName([
@@ -357,7 +359,7 @@ try {
     ]) === "Afiliacion al INAPAM",
     "getActiveServiceName: no detecta servicio activo desde menu",
   );
-  passed += 8;
+  passed += 10;
 } catch (error) {
   failed += 1;
   console.error(`FAIL support - ${(error as Error).message}`);

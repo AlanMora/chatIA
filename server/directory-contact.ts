@@ -174,9 +174,7 @@ export async function buildDirectoryContactResponse(chatbotId: number, message: 
     .filter((entry) => entry.score >= 16)
     .sort((a, b) => b.score - a.score);
 
-  if (scored.length === 0) {
-    return "No encontré un teléfono directo actualizado para esa oficina en el directorio.";
-  }
+  if (scored.length === 0) return null;
 
   const bestScore = scored[0].score;
   const bestMatches = scored.filter((entry) => bestScore - entry.score <= 8).map((entry) => entry.contact);
@@ -186,7 +184,5 @@ export async function buildDirectoryContactResponse(chatbotId: number, message: 
   }
 
   const best = bestMatches[0];
-  return best.phone
-    ? formatContact(best)
-    : `No encontré un teléfono directo actualizado para ${best.office} en el directorio.`;
+  return best.phone ? formatContact(best) : null;
 }
