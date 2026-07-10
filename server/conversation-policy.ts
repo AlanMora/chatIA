@@ -32,7 +32,7 @@ type ServiceOption = {
 };
 
 const SECTION_KEYWORDS =
-  /\b(requisitos?|costos?|cuanto|cu[aá]nto|horario|vigencia|convocatoria|lugar|donde queda|d[oó]nde queda|direccion|direcci[oó]n|telefono|tel[eé]fono|contacto|en que consiste|en qu[eé] consiste|a quien va dirigido|a qui[eé]n va dirigido|detalles?|m[aá]s detalles?|ampliar|pasos?|procedimiento|proceso|como lo hago|c[oó]mo lo hago|que sigue|qu[eé] sigue)\b/i;
+  /\b(requisitos?|costos?|cuanto|cu[aá]nto|horario|vigencia|convocatoria|lugar|donde queda|d[oó]nde queda|donde se encuentran|d[oó]nde se encuentran|direccion|direcci[oó]n|ubicaci[oó]n|ubicaciones|telefono|tel[eé]fono|contacto|en que consiste|en qu[eé] consiste|a quien va dirigido|a qui[eé]n va dirigido|detalles?|m[aá]s detalles?|ampliar|pasos?|procedimiento|proceso|como lo hago|c[oó]mo lo hago|que sigue|qu[eé] sigue)\b/i;
 
 const COMPLETE_RECORD_KEYWORDS =
   /\b(ficha completa|todos los datos|toda la informacion|toda la informaci[oó]n|detalle completo|proceso completo)\b/i;
@@ -395,7 +395,7 @@ export function getRequestedSectionLabel(
   if (/\brequisitos?\b/i.test(normalized)) return "Requisitos";
   if (/\b(costos?|cuanto|cu[aá]nto)\b/i.test(normalized)) return "Costos";
   if (/\b(horario|vigencia|convocatoria)\b/i.test(normalized)) return "Horario, vigencia o convocatoria";
-  if (/\b(lugar|donde queda|d[oó]nde queda|direccion|direcci[oó]n|telefono|tel[eé]fono|contacto)\b/i.test(normalized)) return "Lugar y contacto";
+  if (/\b(lugar|donde queda|d[oó]nde queda|donde se encuentran|d[oó]nde se encuentran|direccion|direcci[oó]n|ubicaci[oó]n|ubicaciones|telefono|tel[eé]fono|contacto)\b/i.test(normalized)) return "Lugar y contacto";
   if (/\ben que consiste\b/i.test(normalized)) return "En que consiste";
   if (/\ba quien va dirigido\b/i.test(normalized)) return "A quien va dirigido";
   if (/\bnota importante\b/i.test(normalized)) return "Nota importante";

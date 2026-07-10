@@ -11,7 +11,7 @@ import { registerElevenLabsRoutes } from "./elevenlabs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { buildKnowledgeContext, processKnowledgeItem } from "./knowledge-base";
 import { ELEVENLABS_VOICE_ENABLED } from "./feature-flags";
-import { buildRuntimeSystemPrompt, classifyConversationIntent, getDeterministicWidgetResponse } from "./conversation-policy";
+import { buildRuntimeSystemPrompt, classifyConversationIntent, extractServiceOptionsFromList, getDeterministicWidgetResponse } from "./conversation-policy";
 import { buildDirectoryContactResponse } from "./directory-contact";
 import { isWidgetOriginAllowed } from "./widget-security";
 import { buildCapabilitiesPrompt, ensureAgentCapabilitiesSeeded } from "./agent-capabilities";
@@ -198,16 +198,48 @@ function isHabilitecaItem(item: KnowledgeBaseItem): boolean {
     (haystack.includes("tipo habilitecas") || haystack.includes("habiliteca"));
 }
 
-async function buildDeterministicLocationResponse(chatbotId: number, message: string): Promise<string | null> {
+function getPreviousHabilitecaOptions(messages: { role: string; content: string }[] = []): string[] {
+  const previousAssistant = [...messages]
+    .slice(0, -1)
+    .reverse()
+    .find((message) => message.role === "assistant");
+
+  if (!previousAssistant) return [];
+
+  return extractServiceOptionsFromList(previousAssistant.content)
+    .filter((option) => normalizeForCitizenQuery(option).includes("habiliteca"))
+    .slice(0, 10);
+}
+
+function findHabilitecaByOption(items: KnowledgeBaseItem[], option: string): KnowledgeBaseItem | null {
+  const normalizedOption = normalizeForCitizenQuery(option).replace(/\bhabilitecas\b/g, "habiliteca");
+  return items.find((item) => {
+    const normalizedTitle = normalizeForCitizenQuery(item.title).replace(/\bhabilitecas\b/g, "habiliteca");
+    return normalizedTitle.includes(normalizedOption) || normalizedOption.includes(normalizedTitle);
+  }) || null;
+}
+
+function formatHabilitecaSchedule(item: KnowledgeBaseItem): string {
+  const days = getMetadataString(item, "dias_atencion");
+  const start = getMetadataString(item, "horario_inicio");
+  const end = getMetadataString(item, "horario_fin");
+  if (start && end) return `${days ? `${days}, ` : ""}${start}-${end}`;
+  if (days) return `${days}. No encontré horario específico en la información disponible.`;
+  return "No encontré horario especificado en la información disponible.";
+}
+
+async function buildDeterministicLocationResponse(chatbotId: number, message: string, messages: { role: string; content: string }[] = []): Promise<string | null> {
   const normalized = normalizeForCitizenQuery(message);
   const asksHabilitecas = /\bhabilitecas?\b/.test(normalized);
-  if (!asksHabilitecas) return null;
-
   const asksCount = /\b(cuantas|cuantos|numero|total)\b/.test(normalized);
-  const asksList = /\b(todas|lista|listado|cuales|ubicaciones|direcciones|donde)\b/.test(normalized);
+  const asksList = /\b(todas|lista|listado|cuales|ubicaciones|direcciones|donde|encuentran)\b/.test(normalized);
   const asksNear = /\b(cerca|cercas|cercana|cercano|mas cercana|mas cercano)\b/.test(normalized);
+  const asksSchedule = /\b(horario|hora|atienden|atencion|abren|cierran|dias)\b/.test(normalized);
+  const previousHabilitecaOptions = getPreviousHabilitecaOptions(messages);
+  const isHabilitecaFollowUp = previousHabilitecaOptions.length > 0 && (asksList || asksSchedule || asksNear);
 
-  if (!asksCount && !asksList && !asksNear) return null;
+  if (!asksHabilitecas && !isHabilitecaFollowUp) return null;
+  if (asksHabilitecas && !asksCount && !asksList && !asksNear && !asksSchedule) return null;
 
   const items = await storage.getKnowledgeBaseItemsByChatbot(chatbotId);
   const habilitecas = items
@@ -216,6 +248,35 @@ async function buildDeterministicLocationResponse(chatbotId: number, message: st
 
   if (habilitecas.length === 0) {
     return "No encontré Habilitecas especificadas en la información disponible.";
+  }
+
+  if (isHabilitecaFollowUp && previousHabilitecaOptions.length > 0 && !asksNear) {
+    const selected = previousHabilitecaOptions
+      .map((option) => findHabilitecaByOption(habilitecas, option))
+      .filter((item): item is KnowledgeBaseItem => Boolean(item));
+
+    if (selected.length > 0) {
+      const lines = selected.map((item, index) => {
+        const direccion = getMetadataString(item, "direccion");
+        const telefono = getMetadataString(item, "telefono");
+        const mapsUrl = getMetadataString(item, "google_maps_url") || item.sourceUrl;
+
+        if (asksSchedule) {
+          return `${index + 1}. ${item.title}\n   Horario: ${formatHabilitecaSchedule(item)}`;
+        }
+
+        const details = [
+          direccion ? `Dirección: ${direccion}` : null,
+          telefono ? `Teléfono: ${telefono}` : null,
+          mapsUrl ? `Mapa: ${normalizeGoogleMapsUrl(mapsUrl)}` : null,
+        ].filter(Boolean).join(". ");
+        return `${index + 1}. ${item.title}${details ? `\n   ${details}.` : ""}`;
+      });
+
+      return asksSchedule
+        ? `Estos son los horarios registrados para las Habilitecas del listado anterior:\n\n${lines.join("\n")}`
+        : `Estas son las ubicaciones registradas para las Habilitecas del listado anterior:\n\n${lines.join("\n")}`;
+    }
   }
 
   if (asksNear) {
@@ -2009,7 +2070,7 @@ export async function registerRoutes(
       // Get conversation history
       const messages = await storage.getWidgetMessagesByConversation(conversation.id);
       const directoryContactResponse = await buildDirectoryContactResponse(chatbotId, message);
-      const deterministicLocationResponse = await buildDeterministicLocationResponse(chatbotId, message);
+      const deterministicLocationResponse = await buildDeterministicLocationResponse(chatbotId, message, messages);
       let deterministicResponse = getDeterministicWidgetResponse(messages);
       let deterministicKnowledgeResult: Awaited<ReturnType<typeof buildKnowledgeContext>> | null = null;
       const currentIntent = classifyConversationIntent(message, messages);
