@@ -307,9 +307,13 @@ async function getLexicalKnowledgeMatches(chatbotId: number, query: string): Pro
   return items
     .filter((item) => {
       const haystack = normalizeForMatch(`${item.title} ${item.content} ${JSON.stringify(item.metadata || {})}`);
+      if (wantsHabilitecaLocations) {
+        return item.skill === "ubicaciones_institucionales" && haystack.includes("habiliteca");
+      }
       return aliases.some((alias) => haystack.includes(normalizeForMatch(alias)));
     })
-    .slice(0, 6)
+    .sort((a, b) => wantsHabilitecaLocations ? a.title.localeCompare(b.title, "es") : 0)
+    .slice(0, wantsHabilitecaLocations ? 10 : 6)
     .map((item, index) => ({
       id: -item.id,
       itemId: item.id,
