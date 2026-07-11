@@ -76,7 +76,7 @@ export function buildKnowledgeSourceRecords(
   items: KnowledgeBaseItem[],
   selection: KnowledgeSourceSelection,
   query: string,
-  limit = 4,
+  limit = selection.primary === "red_atencion" ? 10 : 4,
 ): KnowledgeSourceRecord[] {
   const queryTerms = normalize(query).split(" ").filter((term) => term.length >= 3);
 
@@ -113,7 +113,20 @@ export function buildKnowledgeSourceRecords(
       };
     });
 }
+
+export function formatKnowledgeSourceRecords(records: KnowledgeSourceRecord[]): string {
+  return records.map((record, index) => {
+    const fields = Object.entries(record.fields)
+      .map(([label, value]) => `- ${label}: ${value}`)
+      .join("\n");
+    const heading = record.source === "red_atencion"
+      ? `REGISTRO ${index + 1}\nNombre: ${record.title}`
+      : `[${record.kind}] ${record.title}`;
+    return `${heading}${fields ? `\n${fields}` : ""}${fields && record.content ? "\n" : ""}${record.content}`;
+  }).join("\n\n---\n\n");
+}
+
 export function buildSourceFormattingInstructions(selection: KnowledgeSourceSelection): string {
   const sources = [selection.primary, selection.complementary].filter(Boolean).join(", ");
-  return `\n=== FUENTES ACTIVAS ===\nFuente principal: ${selection.primary}.${selection.complementary ? ` Fuente complementaria: ${selection.complementary}.` : ""}\nUsa la fuente complementaria solo si aclara o completa directamente la pregunta. No la presentes como una respuesta separada.\nFormato: para tramites_servicios usa un resumen breve y ofrece apartados cuando corresponda; para red_atencion usa nombre en negritas y viñetas de Dirección, Horario, Teléfono y Mapa solo cuando existan; para faq responde de forma natural y breve.\nNo menciones nombres de fuentes, documentos, metadata ni el texto \"${sources}\" al usuario.\n=== FIN FUENTES ACTIVAS ===`;
+  return `\n=== FUENTES ACTIVAS ===\nFuente principal: ${selection.primary}.${selection.complementary ? ` Fuente complementaria: ${selection.complementary}.` : ""}\nUsa la fuente complementaria solo si aclara o completa directamente la pregunta. No la presentes como una respuesta separada.\nFormato: para tramites_servicios usa un resumen breve y ofrece apartados cuando corresponda; para faq responde de forma natural y breve. Para red_atencion, cada REGISTRO recuperado representa una sede: enumera los resultados como 1., 2., 3. y conserva el nombre en negritas con los datos disponibles de Dirección, Horario, Teléfono y Mapa en viñetas. Si se recuperó Dirección, nunca respondas únicamente con el nombre de la sede. No inventes datos que no estén en el registro.\nNo menciones nombres de fuentes, documentos, metadata ni el texto \"${sources}\" al usuario.\n=== FIN FUENTES ACTIVAS ===`;
 }

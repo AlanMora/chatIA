@@ -12,6 +12,7 @@ import {
   belongsToKnowledgeSources,
   buildKnowledgeSourceRecords,
   buildSourceFormattingInstructions,
+  formatKnowledgeSourceRecords,
   selectKnowledgeSources,
 } from "./knowledge-sources";
 
@@ -667,10 +668,7 @@ export async function buildKnowledgeContext(
       sourceSelection,
       retrievalQuery,
     );
-    const structuredToolResults = sourceRecords.map((record) => {
-      const fields = Object.entries(record.fields).map(([label, value]) => `- ${label}: ${value}`).join("\n");
-      return `[${record.kind}] ${record.title}\n${fields}${fields && record.content ? "\n" : ""}${record.content}`;
-    }).join("\n\n---\n\n");
+    const structuredToolResults = formatKnowledgeSourceRecords(sourceRecords);
 
     const body = similarChunks
       .map(chunk => {

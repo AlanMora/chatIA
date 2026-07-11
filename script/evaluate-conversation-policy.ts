@@ -12,7 +12,11 @@ import {
   type ConversationMessage,
   type ConversationState,
 } from "../server/conversation-policy";
-import { selectKnowledgeSources } from "../server/knowledge-sources";
+import {
+  buildSourceFormattingInstructions,
+  formatKnowledgeSourceRecords,
+  selectKnowledgeSources,
+} from "../server/knowledge-sources";
 
 type IntentCase = {
   name: string;
@@ -353,6 +357,21 @@ try {
   assert(buildAmbiguousHelpResponse().includes("Buscar un trámite o servicio"), "respuesta ambigua sin opciones");
   const redAtencion = selectKnowledgeSources("¿Dónde está la Habiliteca más cercana?");
   assert(redAtencion.primary === "red_atencion", "fuente de red de atención no seleccionada");
+  assert(
+    buildSourceFormattingInstructions(redAtencion).includes("nunca respondas únicamente con el nombre"),
+    "red de atención permite respuestas sólo con nombres",
+  );
+  const formattedRedAtencion = formatKnowledgeSourceRecords([
+    {
+      source: "red_atencion",
+      kind: "centro",
+      title: "Habiliteca de prueba",
+      content: "Atención comunitaria.",
+      fields: { "Dirección": "Av. Ejemplo 123", "Teléfono": "3312345678" },
+    },
+  ]);
+  assert(formattedRedAtencion.includes("REGISTRO 1"), "red de atención sin registro numerado");
+  assert(formattedRedAtencion.includes("Dirección: Av. Ejemplo 123"), "red de atención sin dirección estructurada");
   const tramite = selectKnowledgeSources("¿Qué requisitos tiene el trámite de INAPAM?");
   assert(tramite.primary === "tramites_servicios", "fuente de trámites no seleccionada");
   const faq = selectKnowledgeSources("¿Qué apoyos tienen para personas mayores?");
@@ -364,7 +383,7 @@ try {
     ]) === "Afiliacion al INAPAM",
     "getActiveServiceName: no detecta servicio activo desde menu",
   );
-  passed += 10;
+  passed += 13;
 } catch (error) {
   failed += 1;
   console.error(`FAIL support - ${(error as Error).message}`);
