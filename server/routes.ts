@@ -10,6 +10,7 @@ import * as cheerio from "cheerio";
 import { registerElevenLabsRoutes } from "./elevenlabs";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { buildKnowledgeContext, processKnowledgeItem } from "./knowledge-base";
+import { encryptMysqlPassword, syncMysqlProcedures, testMysqlConnection } from "./mysql-sync";
 import { ELEVENLABS_VOICE_ENABLED } from "./feature-flags";
 import { buildRuntimeSystemPrompt, classifyConversationIntent, getDeterministicWidgetResponse } from "./conversation-policy";
 import { isWidgetOriginAllowed } from "./widget-security";
@@ -240,7 +241,7 @@ async function persistUatFile(file: Express.Multer.File) {
 }
 
 function sanitizeChatbot(chatbot: Chatbot) {
-  const { customApiKey, openaiApiKey, geminiApiKey, ...safeChatbot } = chatbot;
+  const { customApiKey, openaiApiKey, geminiApiKey, mysqlPasswordEncrypted, ...safeChatbot } = chatbot;
   return {
     ...safeChatbot,
     hasCustomApiKey: Boolean(customApiKey),
@@ -876,6 +877,86 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/chatbots/:id/mysql-sync", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot || chatbot.userId !== req.user?.claims?.sub) return res.status(403).json({ error: "Access denied" });
+      res.json({
+        enabled: chatbot.mysqlSyncEnabled ?? false,
+        host: chatbot.mysqlHost || "192.168.8.39",
+        port: chatbot.mysqlPort || 3306,
+        database: chatbot.mysqlDatabase || "",
+        user: chatbot.mysqlUser || "",
+        passwordConfigured: Boolean(chatbot.mysqlPasswordEncrypted),
+        intervalMinutes: chatbot.mysqlSyncIntervalMinutes || 15,
+        lastSyncedAt: chatbot.mysqlLastSyncedAt || null,
+      });
+    } catch (error) {
+      console.error("Error getting MySQL sync config:", error);
+      res.status(500).json({ error: "Failed to get MySQL sync configuration" });
+    }
+  });
+
+  app.put("/api/chatbots/:id/mysql-sync", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot || chatbot.userId !== req.user?.claims?.sub) return res.status(403).json({ error: "Access denied" });
+      const host = typeof req.body.host === "string" ? req.body.host.trim() : "";
+      const database = typeof req.body.database === "string" ? req.body.database.trim() : "";
+      const user = typeof req.body.user === "string" ? req.body.user.trim() : "";
+      const port = Number(req.body.port);
+      const intervalMinutes = Number(req.body.intervalMinutes);
+      if (!host || !database || !user || !Number.isInteger(port) || port < 1 || port > 65535) {
+        return res.status(400).json({ error: "Host, puerto, base de datos y usuario son obligatorios." });
+      }
+      const updates: Record<string, unknown> = {
+        mysqlSyncEnabled: Boolean(req.body.enabled),
+        mysqlHost: host,
+        mysqlPort: port,
+        mysqlDatabase: database,
+        mysqlUser: user,
+        mysqlSyncIntervalMinutes: Number.isInteger(intervalMinutes) ? Math.min(Math.max(intervalMinutes, 5), 1440) : 15,
+      };
+      if (typeof req.body.password === "string" && req.body.password) {
+        updates.mysqlPasswordEncrypted = encryptMysqlPassword(req.body.password);
+      }
+      if (!chatbot.mysqlPasswordEncrypted && !updates.mysqlPasswordEncrypted) {
+        return res.status(400).json({ error: "La contraseña MySQL es obligatoria la primera vez." });
+      }
+      const updated = await storage.updateChatbot(id, updates);
+      res.json({ configured: Boolean(updated?.mysqlPasswordEncrypted) });
+    } catch (error) {
+      console.error("Error saving MySQL sync config:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to save MySQL sync configuration" });
+    }
+  });
+
+  app.post("/api/chatbots/:id/mysql-sync/test", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot || chatbot.userId !== req.user?.claims?.sub) return res.status(403).json({ error: "Access denied" });
+      res.json(await testMysqlConnection(chatbot));
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo conectar a MySQL." });
+    }
+  });
+
+  app.post("/api/chatbots/:id/mysql-sync/run", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const chatbot = await storage.getChatbot(id);
+      if (!chatbot || chatbot.userId !== req.user?.claims?.sub) return res.status(403).json({ error: "Access denied" });
+      const result = await syncMysqlProcedures(chatbot, Boolean(req.body?.dryRun));
+      if (!result.dryRun) await storage.updateChatbot(id, { mysqlLastSyncedAt: new Date() });
+      res.json(result);
+    } catch (error) {
+      console.error("Error synchronizing MySQL procedures:", error);
+      res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo sincronizar MySQL." });
+    }
+  });
   app.patch("/api/chatbots/:id/model-settings", isAuthenticated, async (req: any, res) => {
     try {
       const id = parseInt(req.params.id);

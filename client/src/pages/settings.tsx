@@ -18,7 +18,7 @@ import { useTheme } from "@/components/theme-provider";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Chatbot } from "@shared/schema";
-import { Moon, Sun, Monitor, Save, Key, Bell, Shield, Globe, Timer, FileClock } from "lucide-react";
+import { Moon, Sun, Monitor, Save, Key, Bell, Shield, Globe, Timer, FileClock, Database, Play, RefreshCw } from "lucide-react";
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -33,12 +33,19 @@ export default function Settings() {
     dataRetentionDays: 180,
   });
 
+  const [mysqlForm, setMysqlForm] = useState({ enabled: false, host: "192.168.8.39", port: 3306, database: "", user: "", password: "", intervalMinutes: 15 });
+  const [mysqlStatus, setMysqlStatus] = useState<string | null>(null);
   const { data: chatbots, isLoading: isLoadingChatbots } = useQuery<Chatbot[]>({
     queryKey: ["/api/chatbots"],
   });
 
   const selectedBot = chatbots?.find((chatbot) => chatbot.id.toString() === selectedChatbot);
 
+  const { data: mysqlConfig } = useQuery<{ enabled: boolean; host: string; port: number; database: string; user: string; passwordConfigured: boolean; intervalMinutes: number; lastSyncedAt: string | null }>({
+    queryKey: ["/api/chatbots", selectedChatbot, "mysql-sync"],
+    queryFn: async () => { const response = await fetch(`/api/chatbots/${selectedChatbot}/mysql-sync`, { credentials: "include" }); if (!response.ok) throw new Error("No se pudo cargar MySQL."); return response.json(); },
+    enabled: Boolean(selectedChatbot),
+  });
   useEffect(() => {
     if (!selectedChatbot && chatbots?.[0]) {
       setSelectedChatbot(chatbots[0].id.toString());
@@ -57,6 +64,26 @@ export default function Settings() {
     });
   }, [selectedBot]);
 
+  useEffect(() => {
+    if (!mysqlConfig) return;
+    setMysqlForm((current) => ({ ...current, enabled: mysqlConfig.enabled, host: mysqlConfig.host, port: mysqlConfig.port, database: mysqlConfig.database, user: mysqlConfig.user, password: "", intervalMinutes: mysqlConfig.intervalMinutes }));
+  }, [mysqlConfig]);
+
+  const saveMysqlMutation = useMutation({
+    mutationFn: async () => (await apiRequest("PUT", `/api/chatbots/${selectedChatbot}/mysql-sync`, mysqlForm)).json(),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/chatbots", selectedChatbot, "mysql-sync"] }); setMysqlForm((current) => ({ ...current, password: "" })); setMysqlStatus("Configuración guardada. La contraseña permanece oculta."); },
+    onError: (error: Error) => setMysqlStatus(error.message),
+  });
+  const testMysqlMutation = useMutation({
+    mutationFn: async () => (await apiRequest("POST", `/api/chatbots/${selectedChatbot}/mysql-sync/test`)).json() as Promise<{ procedures: number }>,
+    onSuccess: (result) => setMysqlStatus(`Conexión correcta. Se encontraron ${result.procedures} registros.`),
+    onError: (error: Error) => setMysqlStatus(error.message),
+  });
+  const runMysqlMutation = useMutation({
+    mutationFn: async (dryRun: boolean) => (await apiRequest("POST", `/api/chatbots/${selectedChatbot}/mysql-sync/run`, { dryRun })).json() as Promise<{ sourceRows: number; created: number; updated: number; skipped: number; dryRun: boolean }>,
+    onSuccess: (result) => { queryClient.invalidateQueries({ queryKey: ["/api/chatbots", selectedChatbot, "mysql-sync"] }); setMysqlStatus(`${result.dryRun ? "Prueba" : "Sincronización"}: ${result.sourceRows} origen, ${result.created} nuevos, ${result.updated} actualizados, ${result.skipped} sin cambios.`); },
+    onError: (error: Error) => setMysqlStatus(error.message),
+  });
   const saveSecurityMutation = useMutation({
     mutationFn: async () => {
       if (!selectedChatbot) throw new Error("Selecciona un chatbot.");
@@ -215,6 +242,35 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Database className="h-5 w-5" />Sincronización MySQL de Trámites y Servicios</CardTitle>
+            <CardDescription>Actualiza el RAG desde la aplicación fuente. La contraseña se cifra en el servidor y no vuelve a mostrarse.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2"><Label>Host</Label><Input value={mysqlForm.host} onChange={(event) => setMysqlForm((current) => ({ ...current, host: event.target.value }))} data-testid="input-mysql-host" /></div>
+              <div className="space-y-2"><Label>Puerto</Label><Input type="number" value={mysqlForm.port} onChange={(event) => setMysqlForm((current) => ({ ...current, port: Number(event.target.value) }))} data-testid="input-mysql-port" /></div>
+              <div className="space-y-2"><Label>Base de datos</Label><Input value={mysqlForm.database} onChange={(event) => setMysqlForm((current) => ({ ...current, database: event.target.value }))} placeholder="sql_programas_se" data-testid="input-mysql-database" /></div>
+              <div className="space-y-2"><Label>Usuario de solo lectura</Label><Input value={mysqlForm.user} onChange={(event) => setMysqlForm((current) => ({ ...current, user: event.target.value }))} data-testid="input-mysql-user" /></div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+              <div className="space-y-2"><Label>Contraseña</Label><Input type="password" value={mysqlForm.password} onChange={(event) => setMysqlForm((current) => ({ ...current, password: event.target.value }))} placeholder={mysqlConfig?.passwordConfigured ? "Configurada. Escribe otra sólo para reemplazarla." : "Contraseña de MySQL"} data-testid="input-mysql-password" /></div>
+              <div className="space-y-2"><Label>Intervalo programado</Label><Input type="number" min={5} max={1440} value={mysqlForm.intervalMinutes} onChange={(event) => setMysqlForm((current) => ({ ...current, intervalMinutes: Number(event.target.value) }))} data-testid="input-mysql-interval" /></div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
+              <div className="flex items-center gap-3"><Switch checked={mysqlForm.enabled} onCheckedChange={(enabled) => setMysqlForm((current) => ({ ...current, enabled }))} data-testid="switch-mysql-sync" /><div><Label>Habilitar sincronización</Label><p className="text-sm text-muted-foreground">Sólo integra registros vigentes de 2026.</p></div></div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => saveMysqlMutation.mutate()} disabled={!selectedChatbot || saveMysqlMutation.isPending} data-testid="button-save-mysql-sync"><Save className="mr-2 h-4 w-4" />Guardar</Button>
+                <Button variant="outline" onClick={() => testMysqlMutation.mutate()} disabled={!mysqlConfig?.passwordConfigured || testMysqlMutation.isPending} data-testid="button-test-mysql-sync"><RefreshCw className="mr-2 h-4 w-4" />Probar conexión</Button>
+                <Button variant="outline" onClick={() => runMysqlMutation.mutate(true)} disabled={!mysqlConfig?.passwordConfigured || runMysqlMutation.isPending} data-testid="button-dry-run-mysql-sync">Prueba</Button>
+                <Button onClick={() => runMysqlMutation.mutate(false)} disabled={!mysqlConfig?.passwordConfigured || runMysqlMutation.isPending} data-testid="button-run-mysql-sync"><Play className="mr-2 h-4 w-4" />Sincronizar ahora</Button>
+              </div>
+            </div>
+            {mysqlStatus && <p className="text-sm text-muted-foreground" data-testid="text-mysql-sync-status">{mysqlStatus}</p>}
+            {mysqlConfig?.lastSyncedAt && <p className="text-xs text-muted-foreground">Última sincronización: {new Date(mysqlConfig.lastSyncedAt).toLocaleString("es-MX")}</p>}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

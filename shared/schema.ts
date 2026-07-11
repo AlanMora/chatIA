@@ -68,6 +68,15 @@ export const chatbots = pgTable("chatbots", {
   widgetRequirePrivacyNotice: boolean("widget_require_privacy_notice").default(true),
   widgetPrivacyNotice: text("widget_privacy_notice").default("Este asistente brinda orientación informativa. No compartas datos sensibles o de emergencia por este chat."),
   dataRetentionDays: integer("data_retention_days").default(180),
+  // MySQL source-of-truth synchronization for procedures and services
+  mysqlSyncEnabled: boolean("mysql_sync_enabled").default(false),
+  mysqlHost: text("mysql_host"),
+  mysqlPort: integer("mysql_port").default(3306),
+  mysqlDatabase: text("mysql_database"),
+  mysqlUser: text("mysql_user"),
+  mysqlPasswordEncrypted: text("mysql_password_encrypted"),
+  mysqlSyncIntervalMinutes: integer("mysql_sync_interval_minutes").default(15),
+  mysqlLastSyncedAt: timestamp("mysql_last_synced_at"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

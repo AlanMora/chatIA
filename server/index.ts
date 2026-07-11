@@ -7,6 +7,7 @@ import { createServer } from "http";
 import cors from "cors";
 import { storage } from "./storage";
 import { isWidgetOriginAllowed as isChatbotWidgetOriginAllowed } from "./widget-security";
+import { startMysqlSyncScheduler } from "./mysql-sync";
 
 const app = express();
 const httpServer = createServer(app);
@@ -95,6 +96,7 @@ app.use((req, res, next) => {
 (async () => {
   await initializeDatabase();
   await registerRoutes(httpServer, app);
+  startMysqlSyncScheduler();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
