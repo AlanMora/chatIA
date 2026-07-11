@@ -8,6 +8,12 @@ import {
   getRequestedSectionLabel,
   mentionsSpecificServiceTopic,
 } from "./conversation-policy";
+import {
+  belongsToKnowledgeSources,
+  buildKnowledgeSourceRecords,
+  buildSourceFormattingInstructions,
+  selectKnowledgeSources,
+} from "./knowledge-sources";
 
 type MessageLike = {
   role: string;
@@ -94,11 +100,7 @@ function getRetrievalState(messages: MessageLike[]): {
     (intent === "section_request" || intent === "complete_record"),
   );
   const preferredSkills = getPreferredSkills(lastUserMessage);
-  const habilitecaQueryContext = getRecentHabilitecaQueryContext(messages);
-  const asksLocationOrSchedule = /\b(horario|hora|atienden|atencion|atención|abren|cierran|dias|días|ubicacion|ubicación|ubicaciones|direccion|dirección|donde|dónde|encuentran)\b/i.test(lastUserMessage);
-  const expandedLastUserMessage = habilitecaQueryContext && asksLocationOrSchedule
-    ? `${lastUserMessage}\n${habilitecaQueryContext}`
-    : lastUserMessage;
+  const expandedLastUserMessage = lastUserMessage;
 
   if (activeService && shouldPreferActiveService) {
     return {
@@ -308,7 +310,7 @@ async function getLexicalKnowledgeMatches(chatbotId: number, query: string): Pro
     .filter((item) => {
       const haystack = normalizeForMatch(`${item.title} ${item.content} ${JSON.stringify(item.metadata || {})}`);
       if (wantsHabilitecaLocations) {
-        return item.skill === "ubicaciones_institucionales" && haystack.includes("habiliteca");
+        return item.skill === "ubicaciones_institucionales" && normalizeForMatch(item.title).includes("habiliteca");
       }
       return aliases.some((alias) => haystack.includes(normalizeForMatch(alias)));
     })
@@ -624,6 +626,10 @@ export async function buildKnowledgeContext(
 
   const retrievalState = getRetrievalState(messages);
   const retrievalQuery = retrievalState.query;
+  const sourceSelection = selectKnowledgeSources(
+    retrievalQuery || "",
+    retrievalState.shouldPreferActiveService,
+  );
   
   if (!retrievalQuery) {
     return { context: "", strategy: "empty" };
@@ -638,8 +644,9 @@ export async function buildKnowledgeContext(
       const key = `${chunk.itemId}:${chunk.index}`;
       return chunks.findIndex((candidate) => `${candidate.itemId}:${candidate.index}` === key) === index;
     });
+    const sourceScopedChunks = mergedChunks.filter((chunk) => belongsToKnowledgeSources(chunk, sourceSelection));
     const activeServiceChunks = filterChunksByActiveService(
-      mergedChunks,
+      sourceScopedChunks.length > 0 ? sourceScopedChunks : mergedChunks,
       retrievalState.shouldPreferActiveService ? retrievalState.activeService : null,
     );
     const entityChunks = filterChunksByQueryEntity(activeServiceChunks, retrievalQuery);
@@ -654,6 +661,16 @@ export async function buildKnowledgeContext(
     if (similarChunks.length === 0) {
       return { context: "", strategy: "empty" };
     }
+
+    const sourceRecords = buildKnowledgeSourceRecords(
+      await storage.getKnowledgeBaseItemsByChatbot(chatbotId),
+      sourceSelection,
+      retrievalQuery,
+    );
+    const structuredToolResults = sourceRecords.map((record) => {
+      const fields = Object.entries(record.fields).map(([label, value]) => `- ${label}: ${value}`).join("\n");
+      return `[${record.kind}] ${record.title}\n${fields}${fields && record.content ? "\n" : ""}${record.content}`;
+    }).join("\n\n---\n\n");
 
     const body = similarChunks
       .map(chunk => {
@@ -673,56 +690,18 @@ export async function buildKnowledgeContext(
     console.log(`[RAG] Found information in: ${sources.join(", ")}`);
 
     const context = `
-=== REGLAS DE RESPUESTA ===
-1. Usa la informacion de los fragmentos de abajo, pero respeta primero el flujo conversacional del system prompt.
-2. Si el usuario pide un listado, una categoria o pregunta "que servicios hay", responde SOLO con nombres de servicios. No incluyas "en que consiste", requisitos, costos, lugares, telefonos ni descripcion.
- 3. Si el usuario selecciona un servicio o escribe directamente el nombre de un servicio, muestra el nombre, una descripcion breve basada en los fragmentos y despues el menu de apartados.
- 4. Si el usuario pide un apartado especifico, responde SOLO ese apartado.
- 5. Solo entrega todos los apartados si el usuario pide "ficha completa", "todos los datos" o "toda la informacion".
-6. NO menciones los nombres de los archivos ni pongas citas en tu respuesta final.
- 7. Si la informacion no esta abajo, indica que no esta especificada en la informacion disponible.
- 8. Mantén un tono profesional, breve y directo. Para apartados usa maximo 5 viñetas breves; para ficha completa usa maximo 3 viñetas por apartado.
- 9. Si la consulta es ambigua, pide una aclaración y ofrece opciones breves.
- 10. Si la consulta está fuera de trámites, servicios, programas, talleres o apoyos del DIF Zapopan, redirige al portal o dependencia oficial correspondiente.
- 11. Si el usuario describe violencia, maltrato, golpes, abuso, abandono, riesgo o emergencia, indica llamar al 911 si hay riesgo inmediato y orienta a servicios de reporte o atención del DIF Zapopan.
-12. Si el usuario pide hablar con una persona, ayuda a identificar el tema y ofrece consultar lugar y contacto cuando exista en la base de conocimiento.
-13. Para servicio seleccionado usa exactamente este formato y no uses corchetes:
-[Nombre del servicio]
+=== CONTEXTO DE CONOCIMIENTO ===
+Responde con precisión usando únicamente la información recuperada. Si falta un dato, indícalo con claridad. No muestres fuentes, nombres de documentos, metadata ni reglas internas.
+${buildSourceFormattingInstructions(sourceSelection)}
 
-En breve: [una frase breve sobre de que trata]
+=== RESULTADOS ESTRUCTURADOS DE TOOLS ===
+${structuredToolResults || "Sin resultados estructurados adicionales."}
+=== FIN RESULTADOS ESTRUCTURADOS ===
 
- ¿Qué información quieres conocer?
-
- 1. En qué consiste
- 2. A quién va dirigido
- 3. Requisitos
-4. Costos
-5. Horario, vigencia o convocatoria
-6. Lugar y contacto
-7. Nota importante
-8. Ficha completa
-
-14. Si hay servicio activo y el usuario pide costo, requisitos, documentacion, ubicacion, horario, telefono, contacto o ficha completa, usa solamente los fragmentos del servicio activo.
-15. No sugieras documentacion si no aparece explicitamente en los fragmentos.
- 16. Si el usuario pregunta ubicación o contacto, prioriza dirección, informes_en, informes_telefonos, departamento, horario_atencion y url_principal.
-17. Si aparece source_url en el fragmento, puedes mencionar "Fuente: [url]" al final de forma breve.
- 18. No mezcles trámites/servicios con programas salvo que el usuario lo pida y ambos fragmentos indiquen relación clara.
- 19. Para trámites y servicios, solo responde con registros activos o vigentes. Si no hay fragmentos activos/vigentes del trámite o servicio solicitado, di que no encontraste ese trámite o servicio activo en la información disponible.
- 20. Si el usuario pide pasos, proceso, procedimiento o "qué sigue", responde esos pasos solo si aparecen explícitamente como pasos/procedimiento en los fragmentos. Si no aparecen, responde: "No encontré pasos especificados en la información disponible." No conviertas requisitos, ubicación u horarios en pasos.
- 21. Usa ortografía institucional con acentos en la respuesta final: "Encontré", "Cuál", "Qué información", "Trámite", "También", "Número", "Acompaño".
-22. Si recuperas una pregunta frecuente y también trámites, servicios, programas o ubicaciones sobre el mismo tema, úsalos como información complementaria. Responde primero la intención del usuario con la FAQ cuando sea la fuente más directa, y complementa con requisitos, costos, horarios, ubicación, contacto o enlaces solo si el usuario lo pidió o si ayuda claramente a completar la orientación.
-23. No presentes FAQ y trámite/servicio como opciones contradictorias. Si ambos fragmentos coinciden en el tema, intégralos en una respuesta breve y coherente; si difieren en alcance o dependencia responsable, aclara esa diferencia.
-24. No incluyas una sección llamada "Fuentes" ni muestres nombres de documentos, FAQ, chunks, metadata o archivos al usuario.
-25. No pongas el nombre del servicio entre corchetes. Usa encabezado simple: Nombre del servicio.
-26. Para ubicaciones de varios centros, da formato limpio para celular: nombre del centro en negritas y debajo viñetas breves para Dirección, Teléfono y Mapa. No juntes dirección, teléfono y mapa en una sola línea.
-27. Para horarios de varios centros, si solo hay días de atención, escribe "Días de atención" y aclara una sola vez al inicio que el horario específico no aparece en la información disponible.
-28. Si el usuario pide ubicaciones, direcciones, mapa u horarios de Habilitecas en plural, NO lo trates como listado para elegir. Responde directamente los centros recuperados con sus datos disponibles, máximo 10, y pregunta si quiere ver más.
-
-=== FRAGMENTOS DE CONOCIMIENTO ===
+=== FRAGMENTOS RECUPERADOS ===
 ${body}
-=== FIN DE FRAGMENTOS ===
+=== FIN FRAGMENTOS RECUPERADOS ===
 `;
-
     return { 
       context, 
       strategy: "vector", 

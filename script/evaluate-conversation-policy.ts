@@ -12,6 +12,7 @@ import {
   type ConversationMessage,
   type ConversationState,
 } from "../server/conversation-policy";
+import { selectKnowledgeSources } from "../server/knowledge-sources";
 
 type IntentCase = {
   name: string;
@@ -177,16 +178,16 @@ const responseCases: ResponseCase[] = [
     excludes: ["Gratuito"],
   },
   {
-    name: "servicio directo devuelve menu",
+    name: "servicio directo pasa al agente",
     messages: [{ role: "user", content: "Afiliación al INAPAM" }],
-    includes: ["Afiliación al INAPAM", "Te acompaño con este servicio", "¿Qué información quieres conocer?", "3. Requisitos"],
-    excludes: ["Proceso para inscribir", "Adultos mayores", "Servicio gratuito"],
+    includes: [],
+    excludes: [],
   },
   {
-    name: "directo prematrimonial devuelve menu",
+    name: "directo prematrimonial pasa al agente",
     messages: [{ role: "user", content: "platicas prematrimoniales" }],
-    includes: ["platicas prematrimoniales", "Te acompaño con este servicio", "¿Qué información quieres conocer?", "4. Costos"],
-    excludes: ["Cuota aproximada", "actas de nacimiento", "comprobante de transferencia"],
+    includes: [],
+    excludes: [],
   },
   {
     name: "numero desde menu no genera respuesta deterministica",
@@ -219,22 +220,22 @@ const responseCases: ResponseCase[] = [
     excludes: [],
   },
   {
-    name: "saludo devuelve orientacion UX",
+    name: "saludo pasa al agente",
     messages: [{ role: "user", content: "hola" }],
-    includes: ["Para orientarte mejor", "Buscar un trámite o servicio", "Ver programas o talleres"],
-    excludes: ["No encontré ese dato", "Ficha completa"],
+    includes: [],
+    excludes: [],
   },
   {
-    name: "complementaria evita inventar",
+    name: "consulta complementaria pasa al agente",
     messages: [{ role: "user", content: "que es el DIF" }],
-    includes: ["orientación general", "trámite, servicio, programa, taller o apoyo"],
-    excludes: ["Presidencia", "requisitos"],
+    includes: [],
+    excludes: [],
   },
   {
-    name: "fuera de alcance redirige",
+    name: "fuera de alcance pasa al agente",
     messages: [{ role: "user", content: "como tramito mi pasaporte" }],
-    includes: ["Solo puedo orientar", "dependencia oficial correspondiente"],
-    excludes: ["requisitos del pasaporte", "costo del pasaporte"],
+    includes: [],
+    excludes: [],
   },
   {
     name: "emergencia deriva a 911",
@@ -346,12 +347,16 @@ try {
   );
 
   const runtimePrompt = buildRuntimeSystemPrompt("Prompt base", "Contexto RAG");
-  assert(runtimePrompt.includes("POLITICA RUNTIME DE CONVERSACION"), "runtime prompt sin politica");
+  assert(runtimePrompt.includes("IDENTIDAD DE SOFIA"), "runtime prompt sin identidad de SofIA");
   assert(runtimePrompt.includes("Contexto RAG"), "runtime prompt sin contexto RAG");
-  assert(runtimePrompt.includes("consulta es ambigua"), "runtime prompt sin politica UX ambigua");
-  assert(runtimePrompt.includes("No incluyas \"Fuentes:\""), "runtime prompt permite Fuentes visibles");
-  assert(runtimePrompt.includes("Nunca pongas el nombre del servicio entre corchetes"), "runtime prompt sin regla de corchetes");
+  assert(runtimePrompt.includes("No expongas fuentes"), "runtime prompt permite fuentes visibles");
   assert(buildAmbiguousHelpResponse().includes("Buscar un trámite o servicio"), "respuesta ambigua sin opciones");
+  const redAtencion = selectKnowledgeSources("¿Dónde está la Habiliteca más cercana?");
+  assert(redAtencion.primary === "red_atencion", "fuente de red de atención no seleccionada");
+  const tramite = selectKnowledgeSources("¿Qué requisitos tiene el trámite de INAPAM?");
+  assert(tramite.primary === "tramites_servicios", "fuente de trámites no seleccionada");
+  const faq = selectKnowledgeSources("¿Qué apoyos tienen para personas mayores?");
+  assert(faq.primary === "faq", "fuente FAQ no seleccionada");
   assert(
     getActiveServiceName([
       { role: "assistant", content: sectionMenu },
