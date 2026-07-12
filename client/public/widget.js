@@ -632,6 +632,9 @@
     #chatbot-widget-root .chatbot-widget-message-bubble p { margin: 0 0 10px; }
     #chatbot-widget-root .chatbot-widget-message-bubble ul,
     #chatbot-widget-root .chatbot-widget-message-bubble ol { margin: 8px 0 8px 20px; padding: 0; }
+    /* WordPress themes often reset list markers; restore them inside the isolated widget. */
+    #chatbot-widget-root .chatbot-widget-message-bubble ul { list-style: disc outside !important; }
+    #chatbot-widget-root .chatbot-widget-message-bubble ol { list-style: decimal outside !important; }
     #chatbot-widget-root .chatbot-widget-message-bubble li { margin-bottom: 5px; line-height: 1.5; }
     #chatbot-widget-root .chatbot-widget-input-area { padding: 12px 14px; border-color: #E5E7EB; background: #FFFFFF; }
     #chatbot-widget-root .chatbot-widget-input { min-height: 44px; border-color: #E5E7EB; color: #1F2937; font-size: 15px; }
