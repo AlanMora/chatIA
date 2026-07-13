@@ -1,38 +1,106 @@
-# SofIA ChatIA
+# SofIA | Asistente virtual del DIF Zapopan
 
-SofIA ChatIA es una plataforma para crear agentes conversacionales profesionales orientados a servicios publicos. El objetivo actual es construir un asistente institucional para DIF Zapopan capaz de orientar a la ciudadania sobre tramites, servicios, programas, talleres y apoyos usando una base de conocimiento documental, RAG, modelos configurables y control de comportamiento conversacional.
+SofIA es el asistente virtual institucional del DIF Zapopan. Orienta a la ciudadania sobre tramites, servicios, programas, apoyos, preguntas frecuentes y la Red de atencion DIF Zapopan, con una experiencia conversacional clara, accesible y disponible desde el sitio web institucional.
 
-## Alcance Actual
+Esta es la primera version publica de SofIA. Su proposito es facilitar el acceso a informacion institucional; no sustituye la atencion profesional, los canales de emergencia ni los procesos oficiales de cada servicio.
 
-- Aplicacion full-stack con React, Vite, Express, TypeScript, PostgreSQL, Drizzle y pgvector.
-- Autenticacion local JWT/sesion y soporte para Replit Auth.
-- CRUD de chatbots por usuario.
-- Base de conocimiento con carga de texto, URL y archivos PDF/DOC/DOCX/TXT/JSONL.
-- Administracion de base de conocimiento con seleccion multiple, eliminacion masiva y visualizacion de archivos PDF cargados desde esta version.
-- Generacion de embeddings configurable por chatbot, con OpenAI `text-embedding-3-small` a 1536 dimensiones como default recomendado.
-- Busqueda vectorial con pgvector.
-- Catalogo de modelos/proveedores en base de datos con refresh desde API y validacion antes de guardar.
-- Capa UX conversacional para consultas ambiguas, informacion complementaria, fuera de alcance, emergencias y contacto humano.
-- Skills y tools configurables por chatbot con permisos, confirmacion para acciones sensibles y auditoria.
-- Widget embebible con streaming SSE.
-- Analitica de conversaciones y mensajes.
-- Captura de leads.
-- Configuracion inicial de voz con ElevenLabs.
-- Configuracion local para Windows 11 y Docker/Postgres.
-- Deploy con Docker Compose, Postgres/pgvector, healthcheck y seed reproducible de configuracion actual.
+## Caracteristicas principales
 
-## Vision
+- Respuestas conversacionales en espanol, con lenguaje claro y tono institucional cercano.
+- Recuperacion aumentada por busqueda vectorial (RAG): SofIA identifica la intencion de la persona, recupera informacion relevante y responde segun el contexto de la consulta.
+- Fuentes de conocimiento separadas por proposito:
+  - **Tramites y servicios:** requisitos, costos, vigencia, convocatoria, lugares y contactos.
+  - **Red de atencion DIF Zapopan:** centros, Habilitecas, Nidos, CAIC y demas espacios de atencion, con ubicacion, horario, telefono y enlace de mapa cuando existe.
+  - **Preguntas frecuentes:** respuestas institucionales reutilizables para dudas comunes.
+- Presentacion adaptada a la fuente: fichas por apartado para tramites y servicios; ubicaciones, horarios, telefonos y mapas para la Red de atencion; respuestas breves y contextualizadas para FAQ.
+- Manejo de opciones numeradas. Las personas pueden responder con el numero, el nombre o el apartado, por ejemplo `4` para consultar costos.
+- Memoria conversacional de corto alcance para continuar preguntas como "cual es el horario?" o "donde se encuentran?" sin repetir toda la consulta.
+- Respuestas de orientacion para consultas ambiguas, temas fuera de alcance, solicitud de contacto y situaciones sensibles o de posible emergencia.
+- Widget web responsive con bienvenida, accesos rapidos, enlaces seguros, renderizado Markdown y listas visibles aun dentro de WordPress.
+- Plantillas de insercion para el widget y configuracion grafica de dominios permitidos.
+- Panel administrativo para chatbots, base de conocimiento, modelo, embeddings, seguridad del widget, analitica, leads y configuracion visual.
+- Sincronizacion opcional desde MySQL para la fuente de tramites y servicios. Importa registros vigentes de `tramites_y_servicios` y los prepara para RAG.
 
-Crear un agente conversacional de nivel gubernamental que sea:
+## Experiencia publica
 
-- Preciso: no inventa datos y responde solo con informacion disponible.
-- Conversacional: primero orienta, luego profundiza por apartado y maneja ambiguedad sin frustrar al usuario.
-- Auditable: registra fuentes, decisiones y uso de herramientas.
-- Configurable: modelos, embeddings, prompts, skills y tools desde interfaz web.
-- Seguro: separa datos por usuario, protege API keys y controla acceso a herramientas.
-- Accesible: lenguaje claro, flujos cortos y experiencia usable en celular.
+SofIA puede ayudar a encontrar un servicio aunque la pregunta no coincida literalmente con el titulo de una ficha. Por ejemplo, puede interpretar solicitudes sobre apoyo alimentario, atencion psicologica, platicas prematrimoniales, Habilitecas, servicios para personas mayores o la ubicacion de un centro.
 
-## Documentos De Proyecto
+Cuando hay varias coincidencias, muestra alternativas numeradas. Cuando la persona elige una, la ficha se consulta por partes para evitar respuestas extensas y dificiles de revisar:
+
+1. En que consiste
+2. A quien va dirigido
+3. Requisitos
+4. Costos
+5. Horario, vigencia o convocatoria
+6. Lugar y contacto
+7. Nota importante
+8. Ficha completa
+
+## Seguridad y uso responsable
+
+- El widget publico solo acepta los dominios configurados para cada chatbot. En produccion, una lista vacia no habilita CORS externo.
+- Las rutas administrativas requieren autenticacion y las configuraciones estan aisladas por usuario.
+- Las contrasenas de sincronizacion MySQL se cifran en el servidor y no se devuelven a la interfaz.
+- Las peticiones publicas del widget no requieren cookies administrativas.
+- SofIA no debe solicitar datos sensibles ni sustituir canales de emergencia. El mensaje de privacidad se muestra en el widget.
+- Las respuestas se basan en la informacion disponible en la base de conocimiento; la informacion oficial del tramite prevalece.
+
+## Arquitectura
+
+- Frontend: React, Vite, TypeScript, Tailwind y componentes accesibles.
+- Backend: Express y TypeScript.
+- Datos: PostgreSQL, Drizzle ORM y pgvector para embeddings y busqueda semantica.
+- IA: modelos y embeddings configurables por chatbot. El valor recomendado inicial para embeddings es OpenAI `text-embedding-3-small` con 1536 dimensiones.
+- Operacion: Docker Compose, PostgreSQL/pgvector, healthcheck y configuracion reproducible mediante seed.
+
+## Base de conocimiento
+
+La plataforma admite contenido manual, URL y archivos PDF, DOC, DOCX, TXT, Markdown y JSONL. Los contenidos se procesan en fragmentos con embeddings para habilitar recuperacion semantica.
+
+### Directorio y Red de atencion
+
+El archivo `jsonl/integrar/06_directorio_dif_zapopan.canonical.jsonl` contiene el directorio institucional normalizado para RAG. Se utiliza como fuente de verdad para telefonos y contactos de oficinas, centros, Habilitecas, Nidos, CAIC y areas operativas.
+
+```powershell
+npm run prepare:directory-jsonl -- --source="C:\Users\chano\Downloads\Directorio_DIF_Zapopan_RAG_limpio.jsonl"
+npm run import:sofia-kb
+npm run eval:directory
+```
+
+### Sincronizacion MySQL de tramites y servicios
+
+Desde **Configuracion > Sincronizacion MySQL de Tramites y Servicios** se configura el host, puerto, base de datos, usuario de solo lectura, contrasena e intervalo. La conexion se prueba antes de activar la integracion.
+
+La sincronizacion toma los registros con `vigente_2026 = 'SÍ'` de la tabla `tramites_y_servicios`, genera o actualiza su ficha RAG y conserva un identificador externo estable por registro. El acceso a MySQL debe usar una cuenta con permiso de solo lectura.
+
+> La sincronizacion de catalogos grandes puede tomar tiempo porque cada ficha se vectoriza. Antes de volver a ejecutarla en produccion, conviene verificar el estado y los conteos importados en la base de conocimiento.
+
+## Widget web
+
+Configura los dominios permitidos en **Configuracion > Seguridad Productiva del Widget** con origenes completos, por ejemplo:
+
+```text
+https://www.difzapopan.gob.mx
+https://difzapopan.gob.mx
+```
+
+Para desarrollo local, agrega el origen con puerto si aplica, por ejemplo `http://localhost:5173`. Como respaldo operativo, `WIDGET_ALLOWED_ORIGINS` acepta una lista separada por comas cuando el chatbot todavia no tiene dominios configurados.
+
+Fragmento recomendado para WordPress o un sitio web:
+
+```html
+<script
+  src="https://chatdif.difzapopan.gob.mx/widget.js?v=20260713"
+  data-chatbot-id="1"
+  defer>
+</script>
+```
+
+En WordPress, la politica CSP debe permitir `script-src` y `connect-src` hacia `https://chatdif.difzapopan.gob.mx`. Si se utiliza iframe, se debe permitir tambien en `frame-src`.
+
+## Desarrollo y despliegue
+
+Documentacion relacionada:
 
 - [Alcance del proyecto](docs/ALCANCE_PROYECTO.md)
 - [Plan por fases](docs/PLAN_IMPLEMENTACION.md)
@@ -40,15 +108,13 @@ Crear un agente conversacional de nivel gubernamental que sea:
 - [Desarrollo local en Windows](DEV_WINDOWS.md)
 - [Deploy en Proxmox](docs/DEPLOY_PROXMOX.md)
 
-## Deploy Docker
-
-El proyecto incluye `docker-compose.yml` para despliegue con app y PostgreSQL/pgvector:
+Para iniciar el entorno Docker:
 
 ```powershell
 docker compose up -d --build
 ```
 
-Al iniciar, la app ejecuta:
+Al arrancar, la aplicacion ejecuta:
 
 ```powershell
 npm run db:push
@@ -56,95 +122,26 @@ npm run seed:current
 npm start
 ```
 
-El seed vive en `seed/current-config.seed.json` y replica la configuracion actual sin llaves privadas: usuario institucional, chatbot SofIA, modelos, embeddings, skills/tools y capacidades habilitadas.
-
-Healthcheck:
+El seed en `seed/current-config.seed.json` replica la configuracion institucional sin secretos. El estado de la aplicacion se puede consultar en:
 
 ```text
 GET /api/health
 ```
 
-## Directorio Telefónico DIF Zapopan
+En produccion, el proxy inverso debe terminar TLS y reenviar `Host`, `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-For` y `X-Real-IP`. El puerto `5000` no debe exponerse directamente a Internet.
 
-El archivo `jsonl/integrar/06_directorio_dif_zapopan.canonical.jsonl` contiene el directorio telefónico institucional normalizado para RAG. Su `skill` es `directorio_dif_zapopan` y debe considerarse fuente de verdad cuando el usuario pide teléfonos, números directos o contactos de oficinas, Habilitecas, Nidos, CAIC, centros o áreas operativas.
+## Mejoras siguientes
 
-Para regenerarlo desde el archivo limpio original:
+- Mostrar en interfaz el progreso, resultado y errores de sincronizacion MySQL; evitar ejecuciones simultaneas y respuestas HTTP de larga duracion.
+- Incorporar migraciones versionadas para produccion en lugar de depender exclusivamente de `db:push`.
+- Fortalecer operacion: respaldos automaticos, monitoreo, alertas, retencion de datos y runbooks.
+- Implementar RBAC institucional y auditoria ampliada de cambios administrativos.
+- Medir calidad de respuestas, consultas sin resolucion, temas mas solicitados y costo por modelo/proveedor.
+- Anadir versionado, deduplicacion y flujos de revision para documentos de conocimiento.
+- Integrar OCR para PDFs escaneados.
+- Formalizar la canalizacion a atencion humana, tickets y responsables con confirmacion de la persona usuaria.
+- Extender las herramientas operativas de forma segura, con permisos y trazabilidad.
 
-```powershell
-npm run prepare:directory-jsonl -- --source="C:\Users\chano\Downloads\Directorio_DIF_Zapopan_RAG_limpio.jsonl"
-```
+## Principios de producto
 
-Para importarlo junto con la base completa:
-
-```powershell
-npm run import:sofia-kb
-```
-
-Para validar recuperación determinística del directorio:
-
-```powershell
-npm run eval:directory
-```
-
-Cuando la consulta requiere teléfono, el endpoint del widget consulta primero el directorio y responde sin mostrar extensiones, responsables ni datos internos. Las FAQs no se reescriben automáticamente si la pregunta no requiere teléfono.
-
-## Widget Web Y CORS
-
-El widget público toma su origen desde la URL del propio script. Un parámetro de cache, como `?v=20260706-avatar-font`, no modifica las rutas API. Las peticiones públicas del widget no envían cookies ni usan sesión administrativa.
-
-Configura en **Configuración > Seguridad Productiva del Widget** los orígenes permitidos del chatbot con valores explícitos:
-
-```text
-https://www.difzapopan.gob.mx
-https://difzapopan.gob.mx
-```
-
-Como respaldo operativo, `WIDGET_ALLOWED_ORIGINS` acepta la misma lista separada por comas cuando el chatbot aún no tenga dominios definidos. En producción una lista vacía no autoriza CORS externo. Para desarrollo local agrega el origen completo, incluyendo puerto si aplica, por ejemplo `http://localhost:5173`.
-
-```powershell
-npm run eval:widget-security
-```
-
-HAProxy debe terminar TLS y reenviar al contenedor los encabezados `Host`, `X-Forwarded-Proto: https`, `X-Forwarded-Host`, `X-Forwarded-For` y `X-Real-IP`. No debe publicar directamente el puerto 5000. En WordPress se requiere permitir `script-src` y `connect-src` hacia `https://chatdif.difzapopan.gob.mx`; si algún despliegue usa iframe, agregar también ese dominio a `frame-src`.
-
-Fragmento recomendado para WordPress:
-
-```html
-<script
-  src="https://chatdif.difzapopan.gob.mx/widget.js?v=20260710-cors"
-  data-chatbot-id="1"
-  defer>
-</script>
-```
-## Rama De Desarrollo
-
-El trabajo de ampliacion se esta llevando en:
-
-```text
-desarrollo-agente-profesional-gob
-```
-
-## Oportunidades De Mejora
-
-- Separar `server/routes.ts` por dominios.
-- Proteger API keys con cifrado y no devolverlas al frontend.
-- Optimizar queries SQL y agregar indices.
-- Agregar migraciones versionadas para produccion en lugar de `db:push`.
-- Agregar Nginx/SSL y backups automatizados.
-- Implementar RBAC institucional.
-- Medir costo por modelo/proveedor y uso de tools.
-- Agregar OCR para PDFs escaneados.
-- Agregar versionado de documentos de base de conocimiento.
-- Agregar flujo formal de escalamiento humano y mesa de ayuda.
-
-## Futuros Alcances
-
-- Seguridad gubernamental: cifrado de secretos, roles, retencion de datos, auditoria completa y politicas de privacidad.
-- Analitica avanzada: resolucion, temas mas consultados, servicios sin informacion, calidad por conversacion y alertas.
-- Operacion productiva: Nginx, SSL, backups, monitoreo, runbook y despliegues controlados.
-- Tools ejecutables reales: exportar conversaciones, crear leads, generar tickets y canalizar a responsables con confirmacion.
-- Mejora documental: OCR, deduplicacion, segmentacion semantica por ficha y control de versiones.
-
-## Referencias De Diseno
-
-El producto toma como referencia principios de servicios digitales publicos: diseno centrado en usuarios, lenguaje claro, accesibilidad, trazabilidad, privacidad y soporte humano cuando el asistente no pueda resolver una solicitud.
+SofIA se disena bajo principios de servicios digitales publicos: informacion clara, accesibilidad, privacidad, trazabilidad, inclusion y acompanamiento humano cuando un asistente no puede resolver una solicitud.
